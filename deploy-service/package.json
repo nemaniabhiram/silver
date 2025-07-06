@@ -1,0 +1,18 @@
+{
+  "name": "deploy-service",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "aws-sdk": "^2.1692.0",
+    "p-limit": "^6.2.0",
+    "redis": "^5.5.6",
+    "dotenv": "^16.4.1"
+  }
+}
