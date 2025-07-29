@@ -1,4 +1,4 @@
-## System Design
+# System Design
 ![Architecture](silver_architecture.png)
 ## Why the core is split into three auto‑scaled services
 
@@ -63,7 +63,7 @@
 This separation keeps each concern small, testable, and independently scalable—making the whole system easier to reason about and cheaper to run.
 
 
-## TODO
+# TODO
 
 * [x] Implement automatic dark mode
 * [ ] Add logging to the frontend
