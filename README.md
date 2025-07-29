@@ -13,7 +13,7 @@ Because each layer is stateless, we can scale any of them down to zero when idle
 
 ---
 
-## What each piece does, in one line
+## What each piece does
 
 | Piece                   | Role                                                                                   |
 | ----------------------- | -------------------------------------------------------------------------------------- |
@@ -39,7 +39,7 @@ Because each layer is stateless, we can scale any of them down to zero when idle
 A clean split of concerns means smoother scaling, easier debugging, and no single heavy task can clog the user‑facing path.
 
 
-# TODO
+# To Do
 
 * [x] Implement automatic dark mode
 * [ ] Add logging to the frontend
