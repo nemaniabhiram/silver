@@ -116,6 +116,9 @@ function readEntries(zipPath: string): AdmZip.IZipEntry[] {
   try {
     return new AdmZip(zipPath).getEntries();
   } catch (error) {
-    throw new BuildFailure(`That zip couldn't be read: ${(error as Error).message}`);
+    // The library's own wording names itself and its internals, which tells the
+    // person who dropped the file nothing they can act on.
+    console.error(`[worker] unreadable archive ${zipPath}`, error);
+    throw new BuildFailure("That zip is damaged or incomplete. Try creating it again.");
   }
 }
