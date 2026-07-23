@@ -100,7 +100,8 @@ type WritableColumn =
   | "error_message"
   | "started_at"
   | "finished_at"
-  | "build_duration_ms";
+  | "build_duration_ms"
+  | "available_at";
 
 export type TransitionColumns = Partial<Record<WritableColumn, unknown>>;
 
@@ -108,28 +109,36 @@ type Executor = Pool | PoolClient;
 
 /**
  * The only sanctioned way to change a deployment's status. Returns null when the
- * row is not in `from` anymore, which callers read as a lost race.
+ * row has left `from` already, which callers read as a lost race — a conflict in
+ * the api, something to skip in the worker.
+ *
+ * `from` may name several states for actions that are legal from more than one,
+ * such as retrying a deployment that either failed or was cancelled.
  */
 export async function transitionDeployment(
   executor: Executor,
   id: string,
-  from: DeploymentStatus,
+  from: DeploymentStatus | DeploymentStatus[],
   to: DeploymentStatus,
   columns: TransitionColumns = {},
 ): Promise<Deployment | null> {
-  if (!canTransition(from, to)) {
-    throw new Error(`Illegal deployment transition ${from} -> ${to}`);
+  const allowedFrom = Array.isArray(from) ? from : [from];
+
+  for (const status of allowedFrom) {
+    if (!canTransition(status, to)) {
+      throw new Error(`Illegal deployment transition ${status} -> ${to}`);
+    }
   }
 
   const assignments = ["status = $3"];
-  const values: unknown[] = [id, from, to];
+  const values: unknown[] = [id, allowedFrom, to];
   for (const [column, value] of Object.entries(columns)) {
     values.push(value);
     assignments.push(`${column} = $${values.length}`);
   }
 
   const result = await executor.query<DeploymentRow>(
-    `UPDATE deployments SET ${assignments.join(", ")} WHERE id = $1 AND status = $2 RETURNING *`,
+    `UPDATE deployments SET ${assignments.join(", ")} WHERE id = $1 AND status = ANY($2) RETURNING *`,
     values,
   );
 

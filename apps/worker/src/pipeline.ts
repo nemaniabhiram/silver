@@ -24,6 +24,9 @@ import {
 } from "./output.js";
 import { selectPreset } from "./presets.js";
 
+/** Multiplied by the attempt number, so waits grow as hope fades. */
+const RETRY_BACKOFF_SECONDS = 30;
+
 export interface WorkerDependencies {
   config: Config;
   pool: pg.Pool;
@@ -136,14 +139,16 @@ async function recordFailure(
   console.error(`[worker] system error on ${deployment.id}`, error);
 
   if (canRetry) {
+    const waitSeconds = RETRY_BACKOFF_SECONDS * deployment.attemptCount;
     await announce(
       pool,
       deployment.id,
-      `System error, retrying (attempt ${deployment.attemptCount + 1}/${deployment.maxAttempts}): ${reason}`,
+      `System error, retrying in ${waitSeconds}s (attempt ${deployment.attemptCount + 1}/${deployment.maxAttempts}): ${reason}`,
     );
     await transitionDeployment(pool, deployment.id, "BUILDING", "QUEUED", {
       error_message: reason,
       started_at: null,
+      available_at: new Date(Date.now() + waitSeconds * 1000),
     });
     return;
   }

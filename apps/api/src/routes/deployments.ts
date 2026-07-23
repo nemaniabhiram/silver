@@ -1,6 +1,12 @@
 import { createReadStream } from "node:fs";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { isDeploymentId, newDeploymentId, sourceKey } from "@silver/shared";
+import { CopyObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  type Deployment,
+  isDeploymentId,
+  newDeploymentId,
+  sourceKey,
+  transitionDeployment,
+} from "@silver/shared";
 import { type RequestHandler, Router } from "express";
 import { MulterError } from "multer";
 import { z } from "zod";
@@ -9,7 +15,7 @@ import { ApiError } from "../errors.js";
 import type { RateLimiter } from "../rate-limit.js";
 import { rateLimit } from "../rate-limit.js";
 import { toDeploymentResource } from "../resource.js";
-import { findDeployment, insertDeployment } from "../store.js";
+import { findDeployment, insertDeployment, readDeploymentLogs } from "../store.js";
 import { createUploadMiddleware, discard, looksLikeZip } from "../upload.js";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -81,18 +87,100 @@ export function createDeploymentsRouter(
   });
 
   router.get("/:id", limitReads, async (request, response) => {
-    const id = request.params.id;
-    if (typeof id !== "string" || !isDeploymentId(id)) {
-      throw new ApiError("NOT_FOUND", "This deployment doesn't exist — it may have expired.");
+    response.json(toDeploymentResource(await requireDeployment(request.params.id), config));
+  });
+
+  router.get("/:id/logs", limitReads, async (request, response) => {
+    const deployment = await requireDeployment(request.params.id);
+    const afterId = Number(request.query.afterId ?? 0);
+
+    const logs = await readDeploymentLogs(
+      pool,
+      deployment.id,
+      Number.isFinite(afterId) && afterId > 0 ? afterId : 0,
+    );
+
+    response.json({ logs, lastId: Number(logs.at(-1)?.id ?? afterId) || 0 });
+  });
+
+  router.post("/:id/retry", limitWrites, async (request, response) => {
+    const deployment = await requireDeployment(request.params.id);
+
+    const retried = await transitionDeployment(
+      pool,
+      deployment.id,
+      ["FAILED", "CANCELLED"],
+      "QUEUED",
+      { attempt_count: 0, error_message: null, started_at: null, available_at: new Date() },
+    );
+
+    if (!retried) {
+      throw new ApiError(
+        "INVALID_STATE",
+        "Only a failed or cancelled deployment can be retried.",
+      );
     }
 
-    const deployment = await findDeployment(pool, id);
+    response.json(toDeploymentResource(retried, config));
+  });
+
+  router.post("/:id/cancel", limitReads, async (request, response) => {
+    const deployment = await requireDeployment(request.params.id);
+
+    const cancelled = await transitionDeployment(pool, deployment.id, "QUEUED", "CANCELLED", {
+      finished_at: new Date(),
+    });
+
+    if (!cancelled) {
+      throw new ApiError(
+        "INVALID_STATE",
+        "Only a deployment that hasn't started building can be cancelled.",
+      );
+    }
+
+    response.json(toDeploymentResource(cancelled, config));
+  });
+
+  router.post("/:id/redeploy", limitWrites, async (request, response) => {
+    const source = await requireDeployment(request.params.id);
+
+    if (source.status === "EXPIRED") {
+      throw new ApiError("INVALID_STATE", "This deployment expired — its files are gone.");
+    }
+    if (source.status === "QUEUED" || source.status === "BUILDING") {
+      throw new ApiError("INVALID_STATE", "This deployment is still running.");
+    }
+
+    const id = newDeploymentId();
+    await storage.send(
+      new CopyObjectCommand({
+        Bucket: config.S3_BUCKET,
+        CopySource: `${config.S3_BUCKET}/${source.sourceKey}`,
+        Key: sourceKey(id),
+      }),
+    );
+
+    const copy = await insertDeployment(pool, {
+      id,
+      sourceKey: sourceKey(id),
+      sourceSizeBytes: source.sourceSizeBytes,
+      requestedPreset: source.requestedPreset,
+      retentionDays: config.RETENTION_DAYS,
+    });
+
+    response.status(201).json(toDeploymentResource(copy, config));
+  });
+
+  async function requireDeployment(rawId: unknown): Promise<Deployment> {
+    const id = typeof rawId === "string" ? rawId : "";
+    const deployment = isDeploymentId(id) ? await findDeployment(pool, id) : null;
+
     if (!deployment) {
       throw new ApiError("NOT_FOUND", "This deployment doesn't exist — it may have expired.");
     }
 
-    response.json(toDeploymentResource(deployment, config));
-  });
+    return deployment;
+  }
 
   return router;
 }

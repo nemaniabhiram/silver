@@ -12,7 +12,7 @@ export async function claimNextQueuedDeployment(pool: pg.Pool): Promise<Deployme
      SET status = 'BUILDING', started_at = now(), attempt_count = attempt_count + 1
      WHERE id = (
        SELECT id FROM deployments
-       WHERE status = 'QUEUED'
+       WHERE status = 'QUEUED' AND available_at <= now()
        ORDER BY created_at
        LIMIT 1
        FOR UPDATE SKIP LOCKED

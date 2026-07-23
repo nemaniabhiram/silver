@@ -57,8 +57,26 @@ describe("transitionDeployment", () => {
 
     expect(result).toBeNull();
     const [sql, values] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("WHERE id = $1 AND status = $2");
-    expect(values.slice(0, 3)).toEqual(["abc1234567", "QUEUED", "BUILDING"]);
+    expect(sql).toContain("WHERE id = $1 AND status = ANY($2)");
+    expect(values.slice(0, 3)).toEqual(["abc1234567", ["QUEUED"], "BUILDING"]);
+  });
+
+  it("accepts several permitted origins for one action", async () => {
+    const { pool, query } = poolReturning([]);
+
+    await transitionDeployment(pool, "abc1234567", ["FAILED", "CANCELLED"], "QUEUED");
+
+    const [, values] = query.mock.calls[0] as [string, unknown[]];
+    expect(values[1]).toEqual(["FAILED", "CANCELLED"]);
+  });
+
+  it("refuses the whole action when any origin forbids it", async () => {
+    const { pool, query } = poolReturning([]);
+
+    await expect(
+      transitionDeployment(pool, "abc1234567", ["FAILED", "READY"], "QUEUED"),
+    ).rejects.toThrow(/READY -> QUEUED/);
+    expect(query).not.toHaveBeenCalled();
   });
 
   it("writes the extra columns it is handed", async () => {
