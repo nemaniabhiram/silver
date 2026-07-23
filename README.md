@@ -1,48 +1,53 @@
-# System Design
-![Architecture](silver_architecture.png)
+# silver
 
-## Why the backend is sliced into three workers
+Drop a folder. Or a zip. Your static site goes live in seconds on its own subdomain — no account, no configuration.
 
-| Worker              | What it does                                                                                      | Why split it out?                                                                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Request Handler** | Serves every normal API call and static proxy.                                                    | Keeps latency low. It is stateless, tiny, and can scale out in seconds when traffic spikes.                                                     |
-| **Upload Service**  | Clones the user’s Git repo, zips it, drops the zip in S3, then pushes a *build‑ID* onto Redis.    | Git operations and big uploads no longer block the hot path. We can give these nodes extra disk and network without over‑provisioning the rest. |
-| **Deploy Service**  | Watches Redis for new IDs, spins up a throw‑away EC2 build box, and later rolls the artefact out. | Deploy work is bursty and time‑consuming. Isolating it lets us throttle or pause roll‑outs with zero impact on live traffic.                    |
+```
+drop folder/zip → uploading → queued → building → READY → https://x7k2m9qw4p.example.com
+```
 
-Because each layer is stateless, we can scale any of them down to zero when idle and save money.
+Pre-built HTML/CSS/JS goes live as-is. A Vite or Create React App project gets built in a sandboxed container first, and the build output is what ships.
 
----
+## How it works
 
-## What each piece does
+Four small services that never talk to each other directly. All coordination goes through Postgres, all files through object storage.
 
-| Piece                   | Role                                                                                   |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| **DNS**                 | Turns `example.com` into the CDN’s IP.                                                 |
-| **CDN / Edge**          | Serves cached JS/CSS/images; forwards only dynamic traffic.                            |
-| **Load Balancer**       | Single public door; fans requests to the right Auto‑Scaled group.                      |
-| **Build Queue (Redis)** | Glue between Upload and Deploy; flattens bursts of new builds.                         |
-| **EC2 Build Worker**    | Pulls source from S3, runs the build, pushes the artefact back to S3, then shuts down. |
-| **Object Store (S3)**   | Holds both raw source zips and final build artefacts.                                  |
-| **Git Repo**            | Whatever repo URL the user gives; touched **only** by the Upload Service.              |
+| Service | Role |
+|---|---|
+| `apps/api` | Accepts uploads, creates deployments, serves status and logs |
+| `apps/worker` | Claims queued deployments, extracts, builds, uploads the output |
+| `apps/serve` | Maps `<id>.domain` to a deployment and streams its files |
+| `apps/web` | The drop page and the deployment status page |
+| `packages/shared` | Config, the deployment status machine, migrations, storage and id helpers |
 
----
+Deployments are a table that doubles as the queue — the worker claims rows with `FOR UPDATE SKIP LOCKED`. There is no message broker and no internal RPC.
 
-## End‑to‑end flow
+## Running it locally
 
-1. **User hits “Deploy”.** The request reaches the **Upload Service**.
-2. Upload clones the repo, zips the source, saves it to **S3**, and pushes a *build‑ID* to **Redis**.
-3. **Deploy Service** pops that ID, launches an **EC2 Build Worker**, and passes the ID along.
-4. The worker pulls the source zip from **S3**, builds, tests, bundles, and pushes the finished artefact back to **S3**.
-5. Deploy Service swaps the new artefact into production.
-6. Normal users keep hitting the **Request Handler**, which simply fetches the latest built files from **S3**.
+Requires Node 22, pnpm 10, and Docker Desktop.
 
-A clean split of concerns means smoother scaling, easier debugging, and no single heavy task can clog the user‑facing path.
+```bash
+pnpm install
+cp .env.example .env
+pnpm infra:up      # Postgres on :5433, MinIO on :9000 (console :9001)
+pnpm dev           # api :4000 · serve :4001 · web :5173 · worker polling
+```
 
+Migrations run automatically at startup under an advisory lock, so services can boot in any order or all at once.
 
-# To Do
+Deployed sites are reachable at `http://<id>.localhost:4001` — browsers resolve `*.localhost` themselves, so no hosts-file editing is needed.
 
-* [x] Implement automatic dark mode
-* [ ] Add logging to the frontend
-* [ ] Containerize the builds
-* [ ] Implement caching
-* [ ] Parallel downloads/uploads
+```bash
+pnpm fixtures      # generate test zips into fixtures/
+pnpm test          # unit tests
+pnpm typecheck
+pnpm smoke         # end-to-end: upload → poll → fetch the live site
+```
+
+## Safety
+
+Every byte of a drop is attacker-controlled, so the pipeline assumes hostility: zip entries are checked for path traversal and decompression bombs before extraction, builds run in a throwaway non-root container with memory, CPU, pid and wall-clock limits, uploads are size-capped and rate-limited per IP, and anonymous deployments expire on a TTL.
+
+## License
+
+MIT
