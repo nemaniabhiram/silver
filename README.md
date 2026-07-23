@@ -48,6 +48,14 @@ pnpm smoke         # end-to-end: upload → poll → fetch the live site
 
 Every byte of a drop is attacker-controlled, so the pipeline assumes hostility: zip entries are checked for path traversal and decompression bombs before extraction, builds run in a throwaway non-root container with memory, CPU, pid and wall-clock limits, uploads are size-capped and rate-limited per IP, and anonymous deployments expire on a TTL.
 
+Deploy quota is spent on deployments created rather than uploads attempted, so mistakes don't lock anyone out; a separate, more generous ceiling on attempts keeps flooding pointless.
+
+## Not built yet
+
+Everything above runs locally. Production deployment does not exist: there are no per-app Dockerfiles, no reverse proxy config, no wildcard DNS or TLS setup, and no metrics endpoint. Going live means building those, pointing `S3_*` at Cloudflare R2 (or any S3 API), and fronting `*.<domain>` with a proxy routing to `serve` while the apex serves `apps/web`.
+
+Also absent by design: accounts, git integration, custom domains, preview deployments, and server-side rendering.
+
 ## License
 
 MIT
