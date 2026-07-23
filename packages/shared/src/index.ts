@@ -17,6 +17,7 @@ export { DEPLOYMENT_ID_PATTERN, isDeploymentId, newDeploymentId } from "./id.js"
 
 export {
   createStorageClient,
+  ensureBucket,
   pingBucket,
   siteKey,
   sitePrefix,

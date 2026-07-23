@@ -1,4 +1,4 @@
-import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { CreateBucketCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import type { Config } from "./config.js";
 
 export function createStorageClient(config: Config): S3Client {
@@ -15,6 +15,17 @@ export function createStorageClient(config: Config): S3Client {
 
 export async function pingBucket(storage: S3Client, bucket: string): Promise<void> {
   await storage.send(new HeadBucketCommand({ Bucket: bucket }));
+}
+
+/** Idempotent: creating the bucket twice is not an error worth surfacing. */
+export async function ensureBucket(storage: S3Client, bucket: string): Promise<boolean> {
+  try {
+    await pingBucket(storage, bucket);
+    return false;
+  } catch {
+    await storage.send(new CreateBucketCommand({ Bucket: bucket }));
+    return true;
+  }
 }
 
 export function sourceKey(deploymentId: string): string {
