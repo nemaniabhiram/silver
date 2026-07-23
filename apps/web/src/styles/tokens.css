@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* The design system. Nothing outside this file may declare a colour, a font,
+   a radius or a duration — everything is a utility generated from here. */
+@theme {
+  --color-bg: #0a0a0a;
+  --color-surface: #111113;
+  --color-surface-raised: #18181b;
+  --color-line: #26262a;
+  --color-line-active: #3f3f46;
+
+  --color-text: #fafafa;
+  --color-text-dim: #a1a1aa;
+  --color-text-faint: #52525b;
+
+  --color-accent: #fafafa;
+  --color-accent-contrast: #0a0a0a;
+
+  --color-queued: #a1a1aa;
+  --color-building: #f59e0b;
+  --color-ready: #10b981;
+  --color-failed: #ef4444;
+  --color-cancelled: #71717a;
+  --color-expired: #52525b;
+  --color-focus: #60a5fa;
+
+  --font-sans: "Geist", Inter, system-ui, sans-serif;
+  --font-mono: "Geist Mono", Consolas, monospace;
+
+  --text-display: 48px;
+  --text-display--line-height: 1.1;
+  --text-display--font-weight: 650;
+  --text-h2: 20px;
+  --text-h2--line-height: 1.3;
+  --text-h2--font-weight: 600;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-small: 14px;
+  --text-small--line-height: 1.5;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.4;
+  --text-caption--font-weight: 500;
+  --text-caption--letter-spacing: 0.05em;
+
+  --radius-card: 12px;
+  --radius-control: 8px;
+
+  --animate-pulse-dot: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@layer base {
+  html {
+    background-color: var(--color-bg);
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
