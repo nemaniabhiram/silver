@@ -23,3 +23,66 @@ jobs:
       - run: pnpm typecheck
 
       - run: pnpm test
+
+  end-to-end:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: silver
+          POSTGRES_PASSWORD: silver
+          POSTGRES_DB: silver
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U silver -d silver"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: silver
+          MINIO_ROOT_PASSWORD: silver-secret
+          MINIO_DEFAULT_BUCKETS: silver
+        ports: ["9000:9000"]
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build:shared
+
+      - run: node scripts/make-fixtures.mjs
+
+      - name: Start services
+        run: |
+          node node_modules/tsx/dist/cli.mjs apps/api/src/index.ts > api.log 2>&1 &
+          node node_modules/tsx/dist/cli.mjs apps/worker/src/index.ts > worker.log 2>&1 &
+          node node_modules/tsx/dist/cli.mjs apps/serve/src/index.ts > serve.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:4000/healthz && curl -sf http://localhost:4001/healthz && exit 0
+            sleep 2
+          done
+          echo "services never became healthy"; cat api.log worker.log serve.log; exit 1
+
+      - run: node scripts/smoke.mjs
+
+      - name: Service logs
+        if: failure()
+        run: cat api.log worker.log serve.log
