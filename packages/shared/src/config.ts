@@ -25,7 +25,10 @@ const ConfigSchema = z.object({
   TRUST_PROXY: flag.default("false"),
 
   MAX_UPLOAD_MB: positiveInt.default(50),
+  /** Deployments actually created. A rejected upload never costs one. */
   RATE_LIMIT_DEPLOYS_PER_HOUR: positiveInt.default(10),
+  /** Upload attempts, valid or not — the ceiling that makes flooding pointless. */
+  RATE_LIMIT_ATTEMPTS_PER_HOUR: positiveInt.default(60),
   RATE_LIMIT_READS_PER_MINUTE: positiveInt.default(120),
 
   POLL_INTERVAL_MS: positiveInt.default(1500),

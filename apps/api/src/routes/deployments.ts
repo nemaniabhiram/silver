@@ -12,8 +12,7 @@ import { MulterError } from "multer";
 import { z } from "zod";
 import type { Dependencies } from "../dependencies.js";
 import { ApiError } from "../errors.js";
-import type { RateLimiter } from "../rate-limit.js";
-import { rateLimit } from "../rate-limit.js";
+import { type RateLimiter, rateLimit, tooFast } from "../rate-limit.js";
 import { toDeploymentResource } from "../resource.js";
 import { findDeployment, insertDeployment, readDeploymentLogs } from "../store.js";
 import { createUploadMiddleware, discard, looksLikeZip } from "../upload.js";
@@ -30,6 +29,12 @@ export function createDeploymentsRouter(
   const { config, pool, storage } = dependencies;
   const router = Router();
 
+  const limitAttempts = rateLimit(
+    limiter,
+    "attempts",
+    config.RATE_LIMIT_ATTEMPTS_PER_HOUR,
+    HOUR_MS,
+  );
   const limitWrites = rateLimit(
     limiter,
     "deploys",
@@ -43,7 +48,20 @@ export function createDeploymentsRouter(
     MINUTE_MS,
   );
 
-  router.post("/", limitWrites, acceptUpload(config), async (request, response) => {
+  /**
+   * Quota is spent on deployments created, not on attempts made — fumbling a
+   * few uploads should not lock someone out for an hour. Flooding is bounded
+   * separately by the attempt ceiling, and the quota is checked before the file
+   * is read so an over-quota caller is turned away without doing the work.
+   */
+  router.post("/", limitAttempts, acceptUpload(config), async (request, response) => {
+    const quotaKey = `deploys:${request.ip}`;
+    const quota = limiter.peek(quotaKey, config.RATE_LIMIT_DEPLOYS_PER_HOUR, HOUR_MS);
+    if (!quota.allowed) {
+      await discard(request.file?.path);
+      throw tooFast(quota.retryAfterSeconds);
+    }
+
     const file = request.file;
     if (!file) {
       throw new ApiError("INVALID_UPLOAD", "Attach a .zip file in the 'file' field.");
@@ -80,6 +98,7 @@ export function createDeploymentsRouter(
         retentionDays: config.RETENTION_DAYS,
       });
 
+      limiter.consume(quotaKey, config.RATE_LIMIT_DEPLOYS_PER_HOUR, HOUR_MS);
       response.status(201).json(toDeploymentResource(deployment, config));
     } finally {
       await discard(file.path);

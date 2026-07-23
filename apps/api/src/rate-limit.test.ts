@@ -36,3 +36,38 @@ describe("RateLimiter", () => {
     expect(limiter.consume("b", 1, WINDOW, 0).allowed).toBe(true);
   });
 });
+
+describe("peek", () => {
+  it("reports the verdict without spending anything", () => {
+    const limiter = new RateLimiter();
+
+    for (let look = 0; look < 10; look += 1) {
+      expect(limiter.peek("ip", 2, WINDOW, 1_000).allowed).toBe(true);
+    }
+
+    expect(limiter.consume("ip", 2, WINDOW, 1_000).allowed).toBe(true);
+    expect(limiter.consume("ip", 2, WINDOW, 1_000).allowed).toBe(true);
+    expect(limiter.consume("ip", 2, WINDOW, 1_000).allowed).toBe(false);
+  });
+
+  it("sees the exhausted window that consume created", () => {
+    const limiter = new RateLimiter();
+    limiter.consume("ip", 1, WINDOW, 0);
+
+    const verdict = limiter.peek("ip", 1, WINDOW, 10_000);
+    expect(verdict.allowed).toBe(false);
+    expect(verdict.retryAfterSeconds).toBe(50);
+  });
+
+  it("does not open a window a later consume would inherit", () => {
+    const limiter = new RateLimiter();
+
+    limiter.peek("ip", 1, WINDOW, 0);
+    limiter.peek("ip", 1, WINDOW, 30_000);
+
+    // The window starts when the first deployment is actually created, not when
+    // the first look happened, so the caller gets a full window of quota.
+    expect(limiter.consume("ip", 1, WINDOW, 60_000).allowed).toBe(true);
+    expect(limiter.consume("ip", 1, WINDOW, 90_000).allowed).toBe(false);
+  });
+});

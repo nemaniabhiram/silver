@@ -7,8 +7,8 @@ export function DropPage() {
 
   return (
     <DropZone
-      onDeploy={async (archive) => {
-        const deployment = await api.deploy(archive);
+      onDeploy={async (archive, onProgress) => {
+        const deployment = await api.deploy(archive, onProgress);
         navigate(`/d/${deployment.id}`);
       }}
     />

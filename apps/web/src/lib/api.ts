@@ -62,10 +62,46 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  deploy(archive: Blob): Promise<Deployment> {
+  /**
+   * Uses XMLHttpRequest rather than fetch, which reports nothing about a
+   * request body as it goes — and a 50 MB upload with no sign of movement
+   * looks broken.
+   */
+  deploy(archive: Blob, onProgress?: (fraction: number) => void): Promise<Deployment> {
     const form = new FormData();
     form.append("file", archive, "site.zip");
-    return request<Deployment>("/deployments", { method: "POST", body: form });
+
+    return new Promise((resolve, reject) => {
+      const transfer = new XMLHttpRequest();
+      transfer.open("POST", `${API_URL}/deployments`);
+
+      transfer.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          onProgress?.(event.loaded / event.total);
+        }
+      });
+
+      transfer.addEventListener("load", () => {
+        const body: unknown = parse(transfer.responseText);
+
+        if (transfer.status >= 200 && transfer.status < 300) {
+          resolve(body as Deployment);
+          return;
+        }
+
+        const error = (body as { error?: { code: string; message: string } } | null)?.error;
+        reject(new ApiError(error?.code ?? "INTERNAL", error?.message ?? "Something went wrong."));
+      });
+
+      transfer.addEventListener("error", () =>
+        reject(new ApiError("OFFLINE", "Couldn't reach Silver. Check your connection.")),
+      );
+      transfer.addEventListener("abort", () =>
+        reject(new ApiError("ABORTED", "That upload was cancelled.")),
+      );
+
+      transfer.send(form);
+    });
   },
 
   get(id: string): Promise<Deployment> {
@@ -88,6 +124,14 @@ export const api = {
     return request<Deployment>(`/deployments/${id}/redeploy`, { method: "POST" });
   },
 };
+
+function parse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export const IN_PROGRESS: readonly DeploymentStatus[] = ["QUEUED", "BUILDING"];
 

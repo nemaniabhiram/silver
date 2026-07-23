@@ -15,11 +15,12 @@ const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 type Stage = "idle" | "packing" | "uploading";
 
 interface DropZoneProps {
-  onDeploy: (archive: Blob) => Promise<void>;
+  onDeploy: (archive: Blob, onProgress: (fraction: number) => void) => Promise<void>;
 }
 
 export function DropZone({ onDeploy }: DropZoneProps) {
   const [stage, setStage] = useState<Stage>("idle");
+  const [sent, setSent] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -57,8 +58,9 @@ export function DropZone({ onDeploy }: DropZoneProps) {
         return;
       }
 
+      setSent(0);
       setStage("uploading");
-      await onDeploy(payload);
+      await onDeploy(payload, setSent);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That upload didn't work.");
       setStage("idle");
@@ -95,7 +97,15 @@ export function DropZone({ onDeploy }: DropZoneProps) {
 
         {busy ? (
           <div className="mt-6 h-0.5 w-48 overflow-hidden rounded-full bg-line">
-            <div className="h-full w-1/3 animate-[slide_1.2s_ease-in-out_infinite] bg-text" />
+            {stage === "uploading" ? (
+              <div
+                className="h-full bg-text transition-[width] duration-150"
+                style={{ width: `${Math.round(sent * 100)}%` }}
+              />
+            ) : (
+              // Packing has no measurable total until it is done.
+              <div className="h-full w-1/3 animate-[slide_1.2s_ease-in-out_infinite] bg-text" />
+            )}
           </div>
         ) : (
           <p className="mt-4 text-body text-text-dim">
@@ -118,7 +128,7 @@ export function DropZone({ onDeploy }: DropZoneProps) {
           </p>
         )}
 
-        <p className="mt-6 text-caption uppercase tracking-[0.05em] text-text-faint">
+        <p className="mt-6 text-caption uppercase tracking-wider text-text-faint">
           No signup. Static sites only. Live in seconds.
         </p>
 
