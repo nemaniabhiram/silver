@@ -12,9 +12,10 @@ import {
   transitionDeployment,
 } from "@silver/shared";
 import type pg from "pg";
+import { buildInSandbox, ensureBuilderImage } from "./docker.js";
 import { extractZip } from "./extract.js";
 import { BuildFailure } from "./failure.js";
-import { announce } from "./logs.js";
+import { announce, createLogWriter } from "./logs.js";
 import {
   assertDeployable,
   assertWithin,
@@ -53,6 +54,10 @@ export async function runDeployment(
     const preset = await selectPreset(rootDir, deployment.requestedPreset);
     await announce(pool, deployment.id, `Detected a ${preset.name} site.`);
 
+    if (preset.buildCommand) {
+      await runBuild(dependencies, deployment.id, rootDir, preset.buildCommand);
+    }
+
     const outputDir = await preset.resolveOutputDir(rootDir);
     assertWithin(rootDir, outputDir);
 
@@ -77,6 +82,35 @@ export async function runDeployment(
     await recordFailure(dependencies, deployment, error, startedAt);
   } finally {
     await rm(workspace, { recursive: true, force: true });
+  }
+}
+
+async function runBuild(
+  { config, pool }: WorkerDependencies,
+  deploymentId: string,
+  projectDir: string,
+  command: string,
+): Promise<void> {
+  const logs = createLogWriter(pool, deploymentId);
+
+  try {
+    await ensureBuilderImage(config.BUILDER_IMAGE, (line) => logs.write(line));
+    await announce(pool, deploymentId, "Installing dependencies and building…");
+
+    await buildInSandbox({
+      deploymentId,
+      projectDir,
+      command,
+      limits: {
+        image: config.BUILDER_IMAGE,
+        memoryMb: config.BUILD_MEMORY_MB,
+        cpus: config.BUILD_CPUS,
+        timeoutSeconds: config.BUILD_TIMEOUT_SECONDS,
+      },
+      onOutput: (line) => logs.write(line),
+    });
+  } finally {
+    await logs.close();
   }
 }
 

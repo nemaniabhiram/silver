@@ -76,12 +76,16 @@ const fixtures = {
     "main.js": "document.querySelector('#app').textContent = 'built by vite';\n",
   },
 
+  // Fails the way real builds fail: a diagnostic on stderr, then a non-zero exit.
   "failing-build.zip": {
     "package.json": JSON.stringify(
       {
         name: "failing-fixture",
         private: true,
-        scripts: { build: "node -e \"process.exit(1)\"" },
+        scripts: {
+          build:
+            "node -e \"console.error('src/App.jsx:12:3 - error TS2304: Cannot find name theme'); process.exit(1)\"",
+        },
       },
       null,
       2,

@@ -67,10 +67,22 @@ describe("looksLikeClientRoute", () => {
 });
 
 describe("cacheControlFor", () => {
-  it("caches content-hashed assets forever", () => {
-    expect(cacheControlFor("/assets/app.4f3a9c21.js")).toBe(
-      "public, max-age=31536000, immutable",
-    );
+  const IMMUTABLE = "public, max-age=31536000, immutable";
+
+  it("caches webpack-style hashed assets forever", () => {
+    expect(cacheControlFor("/assets/app.4f3a9c21.js")).toBe(IMMUTABLE);
+  });
+
+  it("caches vite-style hashed assets forever", () => {
+    expect(cacheControlFor("/assets/index-ChUGo7tq.js")).toBe(IMMUTABLE);
+    expect(cacheControlFor("/assets/index-DiwrgTda.css")).toBe(IMMUTABLE);
+    expect(cacheControlFor("/assets/logo-a1b2c3d4.svg")).toBe(IMMUTABLE);
+  });
+
+  it("does not mistake ordinary kebab-case names for digests", () => {
+    expect(cacheControlFor("/my-changelog.html")).toBe("no-cache");
+    expect(cacheControlFor("/getting-started.html")).toBe("no-cache");
+    expect(cacheControlFor("/images/hero-banner.png")).toBe("public, max-age=3600");
   });
 
   it("always revalidates html", () => {
