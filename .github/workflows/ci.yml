@@ -41,19 +41,6 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: silver
-          MINIO_ROOT_PASSWORD: silver-secret
-          MINIO_DEFAULT_BUCKETS: silver
-        ports: ["9000:9000"]
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +54,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm run build:shared
+
+      - name: Start object storage
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=silver -e MINIO_ROOT_PASSWORD=silver-secret \
+            minio/minio:latest server /data
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 2
+          done
+          node scripts/ensure-bucket.mjs
 
       - run: node scripts/make-fixtures.mjs
 
