@@ -8,6 +8,23 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    # The transition-table suite runs against a real database rather than a
+    # mock, because what it verifies is that Postgres enforces the guard.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: silver
+          POSTGRES_PASSWORD: silver
+          POSTGRES_DB: silver
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U silver -d silver"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 

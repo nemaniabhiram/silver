@@ -8,24 +8,20 @@ import {
   runMigrations,
   transitionDeployment,
 } from "@silver/shared";
-import type pg from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 const config = loadConfig();
-let pool: pg.Pool;
-let reachable = true;
+const pool = createPool(config);
 
-beforeAll(async () => {
-  pool = createPool(config);
-  try {
-    await runMigrations(pool);
-  } catch {
-    reachable = false;
-  }
-});
+// Resolved before the suite is registered — skipIf is evaluated then, so a flag
+// set in beforeAll would come too late and the suite would run against nothing.
+const reachable = await runMigrations(pool).then(
+  () => true,
+  () => false,
+);
 
 afterAll(async () => {
-  await pool?.end();
+  await pool.end();
 });
 
 async function seed(status: DeploymentStatus): Promise<string> {
