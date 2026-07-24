@@ -16,7 +16,8 @@
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "fixtures": "node scripts/make-fixtures.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "bench": "node scripts/bench.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
