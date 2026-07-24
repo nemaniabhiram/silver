@@ -1,21 +1,29 @@
 @import "tailwindcss";
 
 /* The design system. Nothing outside this file may declare a colour, a font,
-   a radius or a duration — everything is a utility generated from here. */
+   a radius or a duration — everything is a utility generated from here.
+
+   The neutral palette follows the OS: warm cream in light, warm near-black in
+   dark, both easier on the eyes than pure #fff/#000 (Anthropic's claude.ai
+   family). Its values live in the :root blocks below and are mapped into the
+   theme with `inline` so every generated utility flips with the media query.
+   Status and focus colours read on both themes and stay fixed. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-line: var(--line);
+  --color-line-active: var(--line-active);
+
+  --color-text: var(--text);
+  --color-text-dim: var(--text-dim);
+  --color-text-faint: var(--text-faint);
+
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+}
+
 @theme {
-  --color-bg: #0a0a0a;
-  --color-surface: #111113;
-  --color-surface-raised: #18181b;
-  --color-line: #26262a;
-  --color-line-active: #3f3f46;
-
-  --color-text: #fafafa;
-  --color-text-dim: #a1a1aa;
-  --color-text-faint: #52525b;
-
-  --color-accent: #fafafa;
-  --color-accent-contrast: #0a0a0a;
-
   --color-queued: #a1a1aa;
   --color-building: #f59e0b;
   --color-ready: #10b981;
@@ -24,8 +32,8 @@
   --color-expired: #52525b;
   --color-focus: #60a5fa;
 
-  --font-sans: "Geist", Inter, system-ui, sans-serif;
-  --font-mono: "Geist Mono", Consolas, monospace;
+  --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", Consolas, monospace;
 
   --text-display: 48px;
   --text-display--line-height: 1.1;
@@ -68,10 +76,48 @@
   }
 }
 
+/* Light is the default; dark follows the OS. Warm neutrals throughout — no
+   pure #fff or #000. The accent is monochrome, so it inverts with the theme to
+   keep the primary button solid and high-contrast either way. */
+:root {
+  color-scheme: light;
+
+  --bg: #faf9f5;
+  --surface: #ffffff;
+  --surface-raised: #f2f0e9;
+  --line: #e7e4d9;
+  --line-active: #cecabb;
+
+  --text: #1a1915;
+  --text-dim: #6b6a60;
+  --text-faint: #9a978b;
+
+  --accent: #1a1915;
+  --accent-contrast: #faf9f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #1f1e1c;
+    --surface: #262624;
+    --surface-raised: #302f2c;
+    --line: #3a3936;
+    --line-active: #514f49;
+
+    --text: #f5f4ee;
+    --text-dim: #b9b6ab;
+    --text-faint: #82807a;
+
+    --accent: #f5f4ee;
+    --accent-contrast: #1f1e1c;
+  }
+}
+
 @layer base {
   html {
     background-color: var(--color-bg);
-    color-scheme: dark;
   }
 
   body {
