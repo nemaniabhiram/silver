@@ -27,7 +27,7 @@ afterAll(async () => {
   storage.destroy();
 });
 
-/** A real, minimal zip — the api checks the header bytes, not the filename. */
+/** A real, minimal zip: the api checks the header bytes, not the filename. */
 function zipContaining(name: string, contents: string): Buffer {
   const nameBytes = Buffer.from(name, "utf8");
   const body = Buffer.from(contents, "utf8");

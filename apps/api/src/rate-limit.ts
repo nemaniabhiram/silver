@@ -15,7 +15,7 @@ const MAX_TRACKED_KEYS = 10_000;
 
 /**
  * Fixed-window counters held in this process. A second api instance gets its own
- * counters, which is accepted for now — `consume` and `peek` are the seam a
+ * counters, which is accepted for now. `consume` and `peek` are the seam a
  * shared store would slot into without touching any caller.
  */
 export class RateLimiter {

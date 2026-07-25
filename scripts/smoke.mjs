@@ -117,8 +117,8 @@ async function run() {
 
 /**
  * Node's resolver does not map *.localhost to loopback the way browsers do, so
- * dev requests go to the loopback address carrying the subdomain in Host —
- * which is what serve routes on anyway.
+ * dev requests go to the loopback address carrying the subdomain in Host, which
+ * is what serve routes on anyway.
  */
 function siteFetch(deploymentId, path = "/", headers = {}) {
   const host = `${deploymentId}.${siteHost}`;

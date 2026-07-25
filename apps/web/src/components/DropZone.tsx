@@ -20,13 +20,23 @@ interface DropZoneProps {
 
 export function DropZone({ onDeploy }: DropZoneProps) {
   const [stage, setStage] = useState<Stage>("idle");
-  const [sent, setSent] = useState(0);
+  const [progress, setProgress] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const zipInput = useRef<HTMLInputElement>(null);
 
+  // dragenter and dragleave both fire when the cursor crosses onto a child, so
+  // a single boolean flickers as the user moves across the zone. Counting how
+  // deep the drag is means only leaving the zone itself clears the highlight.
+  const dragDepth = useRef(0);
+
   const busy = stage !== "idle";
+
+  function endDrag(): void {
+    dragDepth.current = 0;
+    setDragging(false);
+  }
 
   async function accept(files: DroppedFile[]): Promise<void> {
     setError(null);
@@ -48,8 +58,9 @@ export function DropZone({ onDeploy }: DropZoneProps) {
       if (archive) {
         payload = archive;
       } else {
+        setProgress(0);
         setStage("packing");
-        payload = await zipFiles(files);
+        payload = await zipFiles(files, setProgress);
       }
 
       if (payload.size > MAX_UPLOAD_BYTES) {
@@ -58,9 +69,9 @@ export function DropZone({ onDeploy }: DropZoneProps) {
         return;
       }
 
-      setSent(0);
+      setProgress(0);
       setStage("uploading");
-      await onDeploy(payload, setSent);
+      await onDeploy(payload, setProgress);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That upload didn't work.");
       setStage("idle");
@@ -69,15 +80,21 @@ export function DropZone({ onDeploy }: DropZoneProps) {
 
   return (
     <div className="w-full">
-      <div
-        onDragOver={(event) => {
+      <section
+        aria-label="Deploy a site"
+        onDragEnter={(event) => {
           event.preventDefault();
+          dragDepth.current += 1;
           if (!busy) setDragging(true);
         }}
-        onDragLeave={() => setDragging(false)}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => {
+          dragDepth.current -= 1;
+          if (dragDepth.current <= 0) endDrag();
+        }}
         onDrop={(event) => {
           event.preventDefault();
-          setDragging(false);
+          endDrag();
           if (busy) return;
 
           const entries = entriesFrom(event.dataTransfer);
@@ -96,40 +113,24 @@ export function DropZone({ onDeploy }: DropZoneProps) {
         <h1 className="text-display">{headline(stage)}</h1>
 
         {busy ? (
-          <div className="mt-6 h-0.5 w-48 overflow-hidden rounded-full bg-line">
-            {stage === "uploading" ? (
-              <div
-                className="h-full bg-text transition-[width] duration-150"
-                style={{ width: `${Math.round(sent * 100)}%` }}
-              />
-            ) : (
-              // Packing has no measurable total until it is done.
-              <div className="h-full w-1/3 animate-[slide_1.2s_ease-in-out_infinite] bg-text" />
-            )}
-          </div>
+          <ProgressBar fraction={progress} label={headline(stage)} />
         ) : (
           <p className="mt-4 text-body text-text-dim">
-            Drag a folder or a .zip — or{" "}
-            <button
-              type="button"
-              onClick={() => folderInput.current?.click()}
-              className="font-semibold text-text underline underline-offset-4"
-            >
-              browse folder
-            </button>{" "}
-            /{" "}
-            <button
-              type="button"
-              onClick={() => zipInput.current?.click()}
-              className="font-semibold text-text underline underline-offset-4"
-            >
-              browse zip
-            </button>
+            Drag a folder or a .zip, or{" "}
+            <BrowseButton onClick={() => folderInput.current?.click()}>browse folder</BrowseButton>{" "}
+            / <BrowseButton onClick={() => zipInput.current?.click()}>browse zip</BrowseButton>
           </p>
         )}
 
         <p className="mt-6 text-caption uppercase tracking-wider text-text-faint">
           No signup. Static sites only. Live in seconds.
+        </p>
+
+        {/* Everything above changes silently for anyone not watching it. The
+            percentage stays on the progressbar rather than being announced,
+            since a hundred polite interruptions is not progress reporting. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {announce(stage)}
         </p>
 
         <input
@@ -154,10 +155,46 @@ export function DropZone({ onDeploy }: DropZoneProps) {
             event.target.value = "";
           }}
         />
-      </div>
+      </section>
 
-      {error && <p className="mt-3 text-small text-failed">{error}</p>}
+      {error && (
+        <p role="alert" className="mt-3 text-small text-failed">
+          {error}
+        </p>
+      )}
     </div>
+  );
+}
+
+function ProgressBar({ fraction, label }: { fraction: number; label: string }) {
+  const percent = Math.round(fraction * 100);
+
+  return (
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuenow={percent}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      className="mt-6 h-0.5 w-48 overflow-hidden rounded-full bg-line"
+    >
+      <div
+        className="h-full bg-text transition-[width] duration-150"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  );
+}
+
+function BrowseButton({ onClick, children }: { onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-sm font-semibold text-text underline underline-offset-4 hover:text-text-dim"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -165,6 +202,12 @@ function headline(stage: Stage): string {
   if (stage === "packing") return "Packing…";
   if (stage === "uploading") return "Uploading…";
   return "Drop it. It's live.";
+}
+
+function announce(stage: Stage): string {
+  if (stage === "packing") return "Packing your files";
+  if (stage === "uploading") return "Uploading";
+  return "";
 }
 
 function Spinner() {

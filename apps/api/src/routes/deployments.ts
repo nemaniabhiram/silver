@@ -36,7 +36,7 @@ export function createDeploymentsRouter(dependencies: Dependencies, limiter: Rat
   const limitReads = rateLimit(limiter, "reads", config.RATE_LIMIT_READS_PER_MINUTE, MINUTE_MS);
 
   /**
-   * Quota is spent on deployments created, not on attempts made — fumbling a
+   * Quota is spent on deployments created, not on attempts made. Fumbling a
    * few uploads should not lock someone out for an hour. Flooding is bounded
    * separately by the attempt ceiling, and the quota is checked before the file
    * is read so an over-quota caller is turned away without doing the work.
@@ -149,7 +149,7 @@ export function createDeploymentsRouter(dependencies: Dependencies, limiter: Rat
     const source = await requireDeployment(request.params.id);
 
     if (source.status === "EXPIRED") {
-      throw new ApiError("INVALID_STATE", "This deployment expired — its files are gone.");
+      throw new ApiError("INVALID_STATE", "This deployment expired, so its files are gone.");
     }
     if (source.status === "QUEUED" || source.status === "BUILDING") {
       throw new ApiError("INVALID_STATE", "This deployment is still running.");
@@ -180,7 +180,7 @@ export function createDeploymentsRouter(dependencies: Dependencies, limiter: Rat
     const deployment = isDeploymentId(id) ? await findDeployment(pool, id) : null;
 
     if (!deployment) {
-      throw new ApiError("NOT_FOUND", "This deployment doesn't exist — it may have expired.");
+      throw new ApiError("NOT_FOUND", "This deployment doesn't exist. It may have expired.");
     }
 
     return deployment;

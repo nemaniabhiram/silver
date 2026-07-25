@@ -1,5 +1,5 @@
 # The sandbox untrusted build scripts run inside. It carries a toolchain and
-# nothing else — the project arrives on a bind mount at /workspace, and the
+# nothing else. The project arrives on a bind mount at /workspace, and the
 # container is discarded when the build ends.
 #
 # node:20-alpine already provides uid/gid 1000 as the `node` user, which is what

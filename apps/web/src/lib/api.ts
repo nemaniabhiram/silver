@@ -58,8 +58,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   /**
    * Uses XMLHttpRequest rather than fetch, which reports nothing about a
-   * request body as it goes — and a 50 MB upload with no sign of movement
-   * looks broken.
+   * request body as it goes. A 50 MB upload with no sign of movement looks
+   * broken.
    */
   deploy(archive: Blob, onProgress?: (fraction: number) => void): Promise<Deployment> {
     const form = new FormData();

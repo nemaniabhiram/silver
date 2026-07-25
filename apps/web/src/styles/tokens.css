@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* The design system. Nothing outside this file may declare a colour, a font,
-   a radius or a duration — everything is a utility generated from here.
+   a radius or a duration. Everything is a utility generated from here.
 
    The neutral palette follows the OS: warm cream in light, warm near-black in
    dark, both easier on the eyes than pure #fff/#000 (Anthropic's claude.ai
@@ -66,17 +66,7 @@
   }
 }
 
-/* The indeterminate progress bar: work is happening, duration unknown. */
-@keyframes slide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(300%);
-  }
-}
-
-/* Light is the default; dark follows the OS. Warm neutrals throughout — no
+/* Light is the default; dark follows the OS. Warm neutrals throughout, with no
    pure #fff or #000. The accent is monochrome, so it inverts with the theme to
    keep the primary button solid and high-contrast either way. */
 :root {

@@ -1,6 +1,6 @@
 # silver
 
-Drop a folder. Or a zip. Your static site goes live in seconds on its own subdomain — no account, no configuration.
+Drop a folder. Or a zip. Your static site goes live in seconds on its own subdomain. No account, no configuration.
 
 ```
 drop folder/zip → uploading → queued → building → READY → https://x7k2m9qw4p.example.com
@@ -20,7 +20,7 @@ Four small services that never talk to each other directly. All coordination goe
 | `apps/web`        | The drop page and the deployment status page                              |
 | `packages/shared` | Config, the deployment status machine, migrations, storage and id helpers |
 
-Deployments are a table that doubles as the queue — the worker claims rows with `FOR UPDATE SKIP LOCKED`. There is no message broker and no internal RPC.
+Deployments are a table that doubles as the queue: the worker claims rows with `FOR UPDATE SKIP LOCKED`. There is no message broker and no internal RPC.
 
 ## Running it locally
 
@@ -35,7 +35,7 @@ pnpm dev           # api :4000 · serve :4001 · web :5173 · worker polling
 
 Migrations run automatically at startup under an advisory lock, so services can boot in any order or all at once.
 
-Deployed sites are reachable at `http://<id>.localhost:4001` — browsers resolve `*.localhost` themselves, so no hosts-file editing is needed.
+Deployed sites are reachable at `http://<id>.localhost:4001`. Browsers resolve `*.localhost` themselves, so no hosts-file editing is needed.
 
 ```bash
 pnpm fixtures      # generate test zips into fixtures/
@@ -46,7 +46,7 @@ pnpm smoke         # end-to-end: upload → poll → fetch the live site
 
 ## Performance
 
-Measured with `pnpm bench` (the script is in [scripts/bench.mjs](scripts/bench.mjs)) on a dev laptop, over loopback, against local MinIO — so network RTT is excluded and these are single-node numbers, not a distributed-load claim:
+Measured with `pnpm bench` (the script is in [scripts/bench.mjs](scripts/bench.mjs)) on a dev laptop, over loopback, against local MinIO, so network RTT is excluded and these are single-node numbers, not a distributed-load claim:
 
 - **Drop → live in under 2 seconds** for a pre-built static site (median 1.5 s over 5 runs, from starting the upload to the first 200 from the live subdomain)
 - **~800 req/s sustained on the serve hot path** at concurrency 50, with p50 59 ms / p99 96 ms

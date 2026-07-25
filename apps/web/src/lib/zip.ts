@@ -8,9 +8,9 @@ export interface DroppedFile {
 const IGNORED_DIRECTORIES = new Set(["node_modules", ".git", ".DS_Store"]);
 
 /**
- * Entries must be read while the drop event is still being handled — the
- * DataTransfer is emptied as soon as the handler returns, so this is
- * deliberately synchronous and the traversal happens afterwards.
+ * Entries must be read while the drop event is still being handled, because the
+ * DataTransfer is emptied as soon as the handler returns. This is deliberately
+ * synchronous and the traversal happens afterwards.
  */
 export function entriesFrom(dataTransfer: DataTransfer): FileSystemEntry[] {
   return [...dataTransfer.items]
@@ -50,14 +50,19 @@ export function archiveEntries(files: DroppedFile[]): DroppedFile[] {
   return files.map(({ path, file }) => ({ path: stripRoot(path, root), file }));
 }
 
-export async function zipFiles(files: DroppedFile[]): Promise<Blob> {
+export async function zipFiles(
+  files: DroppedFile[],
+  onProgress?: (fraction: number) => void,
+): Promise<Blob> {
   const archive = new JSZip();
 
   for (const { path, file } of archiveEntries(files)) {
     archive.file(path, file);
   }
 
-  return archive.generateAsync({ type: "blob", compression: "DEFLATE" });
+  return archive.generateAsync({ type: "blob", compression: "DEFLATE" }, ({ percent }) =>
+    onProgress?.(percent / 100),
+  );
 }
 
 export function totalBytes(files: DroppedFile[]): number {

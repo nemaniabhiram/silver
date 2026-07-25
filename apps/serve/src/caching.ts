@@ -11,7 +11,7 @@ const DASHED_HASH = /-([A-Za-z0-9_-]{8,})\.[^.]+$/;
 /**
  * A content-hashed name can be cached forever, because changing the file
  * changes its name. Guessing wrong in that direction serves a stale file for a
- * year, so the dashed form — which resembles ordinary kebab-case names — must
+ * year, so the dashed form, which resembles ordinary kebab-case names, must
  * also look random: kebab-case is conventionally lowercase words, while a
  * base64url digest carries uppercase, or digits in a fixed-width run.
  */

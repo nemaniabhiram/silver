@@ -13,8 +13,8 @@ import { afterAll, describe, expect, it } from "vitest";
 const config = loadConfig();
 const pool = createPool(config);
 
-// Resolved before the suite is registered — skipIf is evaluated then, so a flag
-// set in beforeAll would come too late and the suite would run against nothing.
+// Resolved before the suite is registered, because skipIf is evaluated then. A
+// flag set in beforeAll comes too late and the suite runs against nothing.
 const reachable = await runMigrations(pool).then(
   () => true,
   () => false,

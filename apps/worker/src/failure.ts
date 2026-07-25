@@ -1,7 +1,7 @@
 /**
- * A deployment that failed on its own merits — bad zip, undeployable contents,
- * a build script that exited non-zero. Terminal: retrying runs the same code
- * against the same input and fails the same way.
+ * A deployment that failed on its own merits: a bad zip, undeployable contents,
+ * a build script that exited non-zero. Terminal, because retrying runs the same
+ * code against the same input and fails the same way.
  *
  * Everything else that throws (storage, Docker, Postgres) is a system error and
  * gets requeued instead.

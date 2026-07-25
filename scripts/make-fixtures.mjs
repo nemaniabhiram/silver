@@ -52,7 +52,7 @@ const fixtures = {
   },
 
   "no-index.zip": {
-    "readme.txt": "no index.html and no package.json — undeployable\n",
+    "readme.txt": "no index.html and no package.json, so undeployable\n",
   },
 
   "vite-app.zip": {

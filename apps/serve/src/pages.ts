@@ -1,20 +1,40 @@
+/**
+ * These pages are the first thing a stranger following a dead link sees, so
+ * they follow the OS theme in the same warm neutrals as the app. The values are
+ * copied from the design tokens rather than imported: this service ships no
+ * stylesheet, and a self-contained page is worth one duplicated palette.
+ */
 const PAGE_STYLE = `
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: light;
+    --bg: #faf9f5;
+    --text: #1a1915;
+    --text-dim: #6b6a60;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #1f1e1c;
+      --text: #f5f4ee;
+      --text-dim: #b9b6ab;
+    }
+  }
   body {
     margin: 0;
     min-height: 100dvh;
     display: grid;
     place-content: center;
     gap: 12px;
+    padding: 24px;
     text-align: center;
-    background: #0a0a0a;
-    color: #fafafa;
-    font-family: Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  h1 { margin: 0; font-size: 24px; font-weight: 600; }
-  p { margin: 0; font-size: 14px; color: #a1a1aa; }
-  a { color: #fafafa; }
+  h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+  p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-dim); }
+  a { color: var(--text); }
 `;
 
 function page(title: string, heading: string, detail: string): string {

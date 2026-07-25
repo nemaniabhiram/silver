@@ -34,8 +34,8 @@ export interface LogWriter {
 /**
  * Collects build output and writes it in batches, so a chatty build costs a
  * handful of inserts rather than one per line. A build that will not stop
- * talking is cut off at a fixed budget — the logs exist to explain a failure,
- * and past a point more of them explain less.
+ * talking is cut off at a fixed budget: the logs exist to explain a failure, and
+ * past a point more of them explain less.
  */
 export function createLogWriter(
   pool: pg.Pool,

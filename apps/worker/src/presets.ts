@@ -19,7 +19,7 @@ export interface Preset {
 const NPM_BUILD = "if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build";
 
 /**
- * Ordered by specificity — the first preset whose detect() passes wins.
+ * Ordered by specificity: the first preset whose detect() passes wins.
  * Supporting a new framework means appending one object here; nothing in the
  * pipeline, the poll loop, or the sandbox names a preset.
  */

@@ -23,8 +23,8 @@ export interface SandboxRun {
  * The isolation is the container itself: it is thrown away afterwards, runs as
  * a non-root user, and cannot exceed its memory, CPU, process-count or
  * wall-clock budget. The network stays reachable because npm install needs a
- * registry — so the container is given no environment beyond a writable HOME
- * and a cache path, and nothing of the worker's leaks into it.
+ * registry, so the container is given no environment beyond a writable HOME and
+ * a cache path, and nothing of the worker's leaks into it.
  */
 export async function buildInSandbox(run: SandboxRun): Promise<void> {
   const containerName = `silver-build-${run.deploymentId}`;

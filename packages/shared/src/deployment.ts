@@ -121,7 +121,7 @@ type Executor = Pool | PoolClient;
 
 /**
  * The only sanctioned way to change a deployment's status. Returns null when the
- * row has left `from` already, which callers read as a lost race — a conflict in
+ * row has left `from` already, which callers read as a lost race: a conflict in
  * the api, something to skip in the worker.
  *
  * `from` may name several states for actions that are legal from more than one,

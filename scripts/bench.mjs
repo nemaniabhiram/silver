@@ -104,7 +104,7 @@ async function loadTest(id) {
 
 /**
  * Requests go to loopback with the subdomain in the Host header, because
- * Node's resolver — unlike a browser — does not map *.localhost.
+ * Node's resolver, unlike a browser's, does not map *.localhost.
  */
 function siteFetch(id, path = "/") {
   const port = siteHost.split(":")[1] ?? "80";
@@ -140,7 +140,7 @@ async function assertStackUp() {
     );
     if (!ok) {
       console.error(
-        `${name} is not answering at ${url} — start the stack first (pnpm infra:up && pnpm dev).`,
+        `${name} is not answering at ${url}. Start the stack first (pnpm infra:up && pnpm dev).`,
       );
       process.exit(1);
     }

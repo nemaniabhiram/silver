@@ -11,7 +11,7 @@ const MAX_ENTRIES = 1_000;
 
 /**
  * A site is many requests but one deployment. Caching the status keeps asset
- * traffic off Postgres — one read per site per minute rather than per file.
+ * traffic off Postgres: one read per site per minute rather than per file.
  */
 export class DeploymentLookup {
   private readonly cache = new Map<string, CacheEntry>();

@@ -13,8 +13,8 @@ const DELETE_BATCH = 1000;
 /**
  * Anonymous deployments do not live forever. Expiry removes the files first and
  * marks the row afterwards, so a crash midway leaves a row still claiming to be
- * live over files that are gone rather than the reverse — and running the whole
- * job twice is harmless.
+ * live over files that are gone rather than the reverse. Running the whole job
+ * twice is harmless.
  *
  * This is also why retry and redeploy are illegal from EXPIRED: the source
  * archive they would need is deleted here.
