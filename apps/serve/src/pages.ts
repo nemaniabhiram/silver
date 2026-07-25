@@ -45,3 +45,9 @@ export const EXPIRED_PAGE = page(
   "This site has expired.",
   "Deployments are removed after their retention window. Drop it again to bring it back.",
 );
+
+export const UNAVAILABLE_PAGE = page(
+  "Temporarily unavailable",
+  "This site is temporarily unavailable.",
+  "Something on our side is not answering. The deployment is fine; try again in a moment.",
+);

@@ -1,12 +1,12 @@
 import { pipeline } from "node:stream/promises";
 import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import { type Config, pingDatabase, siteKey } from "@silver/shared";
-import express, { type Express, type Response } from "express";
+import express, { type ErrorRequestHandler, type Express, type Response } from "express";
 import mime from "mime-types";
 import type pg from "pg";
 import { cacheControlFor } from "./caching.js";
 import { DeploymentLookup } from "./lookup.js";
-import { EXPIRED_PAGE, NOT_FOUND_PAGE } from "./pages.js";
+import { EXPIRED_PAGE, NOT_FOUND_PAGE, UNAVAILABLE_PAGE } from "./pages.js";
 import { deploymentIdFromHost, looksLikeClientRoute, storageKeyForPath } from "./routing.js";
 
 export interface Dependencies {
@@ -93,8 +93,26 @@ export function createApp({ config, pool, storage }: Dependencies): Express {
     await streamObject(response, indexKey, fallback);
   });
 
+  app.use(handleErrors);
+
   return app;
 }
+
+/**
+ * These are somebody's live sites, so a database blip or an unreachable bucket
+ * has to look like a page rather than like a stack trace. The visitor is told
+ * their deployment is fine, because it is; only the path to its files is not.
+ */
+const handleErrors: ErrorRequestHandler = (error, _request, response, next) => {
+  console.error("[serve] could not serve a request", error);
+
+  if (response.headersSent) {
+    next(error);
+    return;
+  }
+
+  sendPage(response, 503, UNAVAILABLE_PAGE);
+};
 
 async function fetchObject(
   storage: S3Client,
@@ -143,7 +161,20 @@ async function streamObject(response: Response, key: string, object: StoredObjec
     response.setHeader("ETag", object.etag);
   }
 
-  await pipeline(object.body, response);
+  try {
+    await pipeline(object.body, response);
+  } catch (error) {
+    // A visitor who navigates away mid-download is ordinary browsing, not a
+    // fault. Logging it would fill the log with alarms nobody should act on.
+    if (!isClientDisconnect(error)) {
+      throw error;
+    }
+  }
+}
+
+function isClientDisconnect(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  return code === "ERR_STREAM_PREMATURE_CLOSE" || code === "ECONNRESET" || code === "EPIPE";
 }
 
 function sendPage(response: Response, status: number, html: string): void {

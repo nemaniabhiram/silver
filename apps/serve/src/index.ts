@@ -1,4 +1,10 @@
-import { createPool, createStorageClient, loadConfig, runMigrations } from "@silver/shared";
+import {
+  createPool,
+  createStorageClient,
+  loadConfig,
+  runMigrations,
+  shutdownOnSignal,
+} from "@silver/shared";
 import { createApp } from "./app.js";
 
 const config = loadConfig();
@@ -10,6 +16,11 @@ if (applied.length > 0) {
   console.log(`[serve] applied migrations: ${applied.join(", ")}`);
 }
 
-createApp({ config, pool, storage }).listen(config.SERVE_PORT, () => {
+const server = createApp({ config, pool, storage }).listen(config.SERVE_PORT, () => {
   console.log(`[serve] listening on http://localhost:${config.SERVE_PORT}`);
+});
+
+shutdownOnSignal("serve", server, async () => {
+  await pool.end();
+  storage.destroy();
 });
