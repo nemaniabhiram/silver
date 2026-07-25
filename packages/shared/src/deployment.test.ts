@@ -90,6 +90,21 @@ describe("transitionDeployment", () => {
     expect(sql).toContain("error_message = $4");
     expect(values[3]).toBe("boom");
   });
+
+  /**
+   * Column names cannot be parameterised, so they reach the SQL as text. The
+   * type stops every caller in this repo, but types are gone at runtime and
+   * this is the one function every status write passes through.
+   */
+  it("refuses a column name it does not recognise", async () => {
+    const { pool, query } = poolReturning([]);
+    const smuggled = { "status = 'READY', error_message": null } as never;
+
+    await expect(
+      transitionDeployment(pool, "abc1234567", "BUILDING", "FAILED", smuggled),
+    ).rejects.toThrow(/Refusing to write unknown deployment column/);
+    expect(query).not.toHaveBeenCalled();
+  });
 });
 
 describe("deploymentUrl", () => {
