@@ -91,19 +91,31 @@ export function deploymentUrl(id: string, config: Config): string {
   return `${config.DEPLOY_PROTOCOL}://${id}.${config.DEPLOY_DOMAIN}`;
 }
 
-type WritableColumn =
-  | "detected_preset"
-  | "output_size_bytes"
-  | "output_file_count"
-  | "artifact_checksum"
-  | "attempt_count"
-  | "error_message"
-  | "started_at"
-  | "finished_at"
-  | "build_duration_ms"
-  | "available_at";
+/**
+ * Column names cannot be parameterised, so these are the only strings allowed
+ * anywhere near the UPDATE below. The type keeps callers honest at compile time
+ * and the array keeps them honest at runtime, where the type is gone.
+ */
+const WRITABLE_COLUMNS = [
+  "detected_preset",
+  "output_size_bytes",
+  "output_file_count",
+  "artifact_checksum",
+  "attempt_count",
+  "error_message",
+  "started_at",
+  "finished_at",
+  "build_duration_ms",
+  "available_at",
+] as const;
+
+type WritableColumn = (typeof WRITABLE_COLUMNS)[number];
 
 export type TransitionColumns = Partial<Record<WritableColumn, unknown>>;
+
+function isWritableColumn(column: string): column is WritableColumn {
+  return (WRITABLE_COLUMNS as readonly string[]).includes(column);
+}
 
 type Executor = Pool | PoolClient;
 
@@ -133,6 +145,10 @@ export async function transitionDeployment(
   const assignments = ["status = $3"];
   const values: unknown[] = [id, allowedFrom, to];
   for (const [column, value] of Object.entries(columns)) {
+    if (!isWritableColumn(column)) {
+      throw new Error(`Refusing to write unknown deployment column "${column}"`);
+    }
+
     values.push(value);
     assignments.push(`${column} = $${values.length}`);
   }

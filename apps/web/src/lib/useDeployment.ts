@@ -44,14 +44,19 @@ export function useDeployment(id: string): DeploymentView {
     void refresh();
   }, [refresh]);
 
+  // Depending on the whole deployment would rebuild the interval on every poll,
+  // since each response is a new object. The status is the only part that
+  // decides whether polling continues.
+  const status = deployment?.status;
+
   useEffect(() => {
-    if (deployment && !isInProgress(deployment.status)) {
+    if (status && !isInProgress(status)) {
       return;
     }
 
     const timer = setInterval(() => void refresh(), POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [deployment, refresh]);
+  }, [status, refresh]);
 
   return { deployment, logs, error, refresh, apply: setDeployment };
 }

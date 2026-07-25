@@ -36,11 +36,25 @@ export function loneArchive(files: DroppedFile[]): File | null {
   return files.length === 1 && only && /\.zip$/i.test(only.file.name) ? only.file : null;
 }
 
+/**
+ * The drop as it will appear inside the archive, with the wrapping folder that
+ * every dropped directory nests its contents under removed.
+ *
+ * That folder is a property of the drop rather than of any one file, so it is
+ * resolved once here. Resolving it per file walked the whole list again each
+ * time: a 5,000 file folder spent five seconds of blocked main thread on it
+ * before packing had begun.
+ */
+export function archiveEntries(files: DroppedFile[]): DroppedFile[] {
+  const root = commonRoot(files);
+  return files.map(({ path, file }) => ({ path: stripRoot(path, root), file }));
+}
+
 export async function zipFiles(files: DroppedFile[]): Promise<Blob> {
   const archive = new JSZip();
 
-  for (const { path, file } of files) {
-    archive.file(stripLeadingDirectory(path, files), file);
+  for (const { path, file } of archiveEntries(files)) {
+    archive.file(path, file);
   }
 
   return archive.generateAsync({ type: "blob", compression: "DEFLATE" });
@@ -97,11 +111,10 @@ function isIgnored(path: string): boolean {
 }
 
 /**
- * Dropping a folder nests everything under its name. The worker unwraps a
- * single root too, but doing it here keeps what the user sees honest.
+ * The worker unwraps a single root too, but doing it here keeps what the user
+ * sees honest.
  */
-function stripLeadingDirectory(path: string, files: DroppedFile[]): string {
-  const root = commonRoot(files);
+function stripRoot(path: string, root: string | null): string {
   return root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
 }
 

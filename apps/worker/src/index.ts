@@ -55,9 +55,17 @@ while (accepting) {
   }
 
   console.log(`[worker] building ${deployment.id}`);
-  const build = runDeployment(dependencies, deployment).finally(() => {
-    inFlight.delete(build);
-  });
+
+  // runDeployment records its own build failures, so a rejection here means the
+  // recording failed too, most likely because the database went away. Swallowing
+  // it keeps that from reaching Promise.race above and ending the poll loop.
+  const build = runDeployment(dependencies, deployment)
+    .catch((error: unknown) => {
+      console.error(`[worker] could not finish ${deployment.id}`, error);
+    })
+    .finally(() => {
+      inFlight.delete(build);
+    });
   inFlight.add(build);
 }
 
