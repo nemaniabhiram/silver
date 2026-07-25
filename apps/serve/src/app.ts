@@ -132,11 +132,7 @@ async function fetchObject(
  * extension to read a type or a caching rule from, but the key it resolved to
  * ends in index.html.
  */
-async function streamObject(
-  response: Response,
-  key: string,
-  object: StoredObject,
-): Promise<void> {
+async function streamObject(response: Response, key: string, object: StoredObject): Promise<void> {
   response.setHeader("Content-Type", mime.lookup(key) || "application/octet-stream");
   response.setHeader("Cache-Control", cacheControlFor(key));
 

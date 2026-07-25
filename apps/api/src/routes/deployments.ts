@@ -22,10 +22,7 @@ const MINUTE_MS = 60 * 1000;
 
 const PresetOverride = z.enum(["static", "vite", "cra", "npm"]).optional();
 
-export function createDeploymentsRouter(
-  dependencies: Dependencies,
-  limiter: RateLimiter,
-): Router {
+export function createDeploymentsRouter(dependencies: Dependencies, limiter: RateLimiter): Router {
   const { config, pool, storage } = dependencies;
   const router = Router();
 
@@ -35,18 +32,8 @@ export function createDeploymentsRouter(
     config.RATE_LIMIT_ATTEMPTS_PER_HOUR,
     HOUR_MS,
   );
-  const limitWrites = rateLimit(
-    limiter,
-    "deploys",
-    config.RATE_LIMIT_DEPLOYS_PER_HOUR,
-    HOUR_MS,
-  );
-  const limitReads = rateLimit(
-    limiter,
-    "reads",
-    config.RATE_LIMIT_READS_PER_MINUTE,
-    MINUTE_MS,
-  );
+  const limitWrites = rateLimit(limiter, "deploys", config.RATE_LIMIT_DEPLOYS_PER_HOUR, HOUR_MS);
+  const limitReads = rateLimit(limiter, "reads", config.RATE_LIMIT_READS_PER_MINUTE, MINUTE_MS);
 
   /**
    * Quota is spent on deployments created, not on attempts made — fumbling a
@@ -72,7 +59,8 @@ export function createDeploymentsRouter(
         throw new ApiError("INVALID_UPLOAD", "That file isn't a zip archive.");
       }
 
-      const preset = PresetOverride.safeParse(request.body?.preset || undefined);
+      const fields = request.body as Record<string, unknown> | undefined;
+      const preset = PresetOverride.safeParse(fields?.["preset"] || undefined);
       if (!preset.success) {
         throw new ApiError("INVALID_UPLOAD", "Preset must be one of: static, vite, cra, npm.");
       }
@@ -134,10 +122,7 @@ export function createDeploymentsRouter(
     );
 
     if (!retried) {
-      throw new ApiError(
-        "INVALID_STATE",
-        "Only a failed or cancelled deployment can be retried.",
-      );
+      throw new ApiError("INVALID_STATE", "Only a failed or cancelled deployment can be retried.");
     }
 
     response.json(toDeploymentResource(retried, config));

@@ -16,8 +16,7 @@ export interface Preset {
  * Choosing up front keeps the output honest, and && stops a failed install from
  * being followed by a build that was never going to work.
  */
-const NPM_BUILD =
-  "if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build";
+const NPM_BUILD = "if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build";
 
 /**
  * Ordered by specificity — the first preset whose detect() passes wins.
@@ -28,12 +27,14 @@ export const PRESETS: readonly Preset[] = [
   {
     name: "static",
     async detect(rootDir) {
-      return !(await exists(path.join(rootDir, "package.json"))) &&
-        (await exists(path.join(rootDir, "index.html")));
+      return (
+        !(await exists(path.join(rootDir, "package.json"))) &&
+        (await exists(path.join(rootDir, "index.html")))
+      );
     },
     buildCommand: null,
-    async resolveOutputDir(rootDir) {
-      return rootDir;
+    resolveOutputDir(rootDir) {
+      return Promise.resolve(rootDir);
     },
   },
   {
@@ -65,17 +66,12 @@ export const PRESETS: readonly Preset[] = [
           return directory;
         }
       }
-      throw new BuildFailure(
-        "The build produced no dist, build, out or public directory.",
-      );
+      throw new BuildFailure("The build produced no dist, build, out or public directory.");
     },
   },
 ];
 
-export async function selectPreset(
-  rootDir: string,
-  requestedName: string | null,
-): Promise<Preset> {
+export async function selectPreset(rootDir: string, requestedName: string | null): Promise<Preset> {
   if (requestedName !== null) {
     const requested = PRESETS.find((preset) => preset.name === requestedName);
     if (!requested) {
@@ -114,9 +110,7 @@ export function hasBuildScript(packageJson: Record<string, unknown> | null): boo
   return isRecord(scripts) && typeof scripts["build"] === "string";
 }
 
-export async function readPackageJson(
-  rootDir: string,
-): Promise<Record<string, unknown> | null> {
+export async function readPackageJson(rootDir: string): Promise<Record<string, unknown> | null> {
   try {
     const parsed: unknown = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"));
     return isRecord(parsed) ? parsed : null;

@@ -18,10 +18,7 @@ export interface DeploymentResource {
   expiresAt: string;
 }
 
-export function toDeploymentResource(
-  deployment: Deployment,
-  config: Config,
-): DeploymentResource {
+export function toDeploymentResource(deployment: Deployment, config: Config): DeploymentResource {
   return {
     id: deployment.id,
     status: deployment.status,

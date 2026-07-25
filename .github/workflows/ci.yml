@@ -37,9 +37,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: pnpm format:check
+
+      - run: pnpm lint
+
       - run: pnpm typecheck
 
       - run: pnpm test
+
+      # Typecheck does not compile the web app. Without this a broken bundle,
+      # a bad index.html import or a Tailwind error reaches master green.
+      - run: pnpm build
 
   end-to-end:
     runs-on: ubuntu-latest

@@ -15,7 +15,10 @@ export function DeploymentPage() {
     return (
       <div className="text-center">
         <h2 className="text-h2">{error}</h2>
-        <Link to="/" className="mt-4 inline-block text-small text-text-dim underline underline-offset-4">
+        <Link
+          to="/"
+          className="mt-4 inline-block text-small text-text-dim underline underline-offset-4"
+        >
           Deploy something
         </Link>
       </div>
@@ -50,7 +53,10 @@ export function DeploymentPage() {
         {(status === "READY" || status === "FAILED" || status === "CANCELLED") && (
           <Button
             onClick={() =>
-              void api.redeploy(id).then((next) => navigate(`/d/${next.id}`)).catch(refresh)
+              void api
+                .redeploy(id)
+                .then((next) => navigate(`/d/${next.id}`))
+                .catch(refresh)
             }
           >
             Redeploy

@@ -176,7 +176,10 @@ describe.skipIf(!reachable)("the deployments api", () => {
     it("retries a cancelled deployment and clears what the last run left", async () => {
       const { body } = await upload().expect(201);
       await request(app).post(`/deployments/${body.id}/cancel`).expect(200);
-      await pool.query("UPDATE deployments SET attempt_count = 2, error_message = 'boom' WHERE id = $1", [body.id]);
+      await pool.query(
+        "UPDATE deployments SET attempt_count = 2, error_message = 'boom' WHERE id = $1",
+        [body.id],
+      );
 
       const retried = await request(app).post(`/deployments/${body.id}/retry`).expect(200);
 

@@ -12,12 +12,12 @@ Pre-built HTML/CSS/JS goes live as-is. A Vite or Create React App project gets b
 
 Four small services that never talk to each other directly. All coordination goes through Postgres, all files through object storage.
 
-| Service | Role |
-|---|---|
-| `apps/api` | Accepts uploads, creates deployments, serves status and logs |
-| `apps/worker` | Claims queued deployments, extracts, builds, uploads the output |
-| `apps/serve` | Maps `<id>.domain` to a deployment and streams its files |
-| `apps/web` | The drop page and the deployment status page |
+| Service           | Role                                                                      |
+| ----------------- | ------------------------------------------------------------------------- |
+| `apps/api`        | Accepts uploads, creates deployments, serves status and logs              |
+| `apps/worker`     | Claims queued deployments, extracts, builds, uploads the output           |
+| `apps/serve`      | Maps `<id>.domain` to a deployment and streams its files                  |
+| `apps/web`        | The drop page and the deployment status page                              |
 | `packages/shared` | Config, the deployment status machine, migrations, storage and id helpers |
 
 Deployments are a table that doubles as the queue — the worker claims rows with `FOR UPDATE SKIP LOCKED`. There is no message broker and no internal RPC.

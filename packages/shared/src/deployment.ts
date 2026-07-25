@@ -45,7 +45,7 @@ export interface Deployment {
   expiresAt: Date;
 }
 
-interface DeploymentRow {
+export interface DeploymentRow {
   id: string;
   status: DeploymentStatus;
   requested_preset: string | null;

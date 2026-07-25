@@ -49,7 +49,10 @@ describe("selectPreset", () => {
 
   it("recognises a vite project", async () => {
     const root = await project({
-      "package.json": packageJson({ devDependencies: { vite: "^6" }, scripts: { build: "vite build" } }),
+      "package.json": packageJson({
+        devDependencies: { vite: "^6" },
+        scripts: { build: "vite build" },
+      }),
       "index.html": "<div id=app></div>",
     });
     expect((await selectPreset(root, null)).name).toBe("vite");
@@ -57,7 +60,10 @@ describe("selectPreset", () => {
 
   it("recognises create-react-app", async () => {
     const root = await project({
-      "package.json": packageJson({ dependencies: { "react-scripts": "5" }, scripts: { build: "react-scripts build" } }),
+      "package.json": packageJson({
+        dependencies: { "react-scripts": "5" },
+        scripts: { build: "react-scripts build" },
+      }),
     });
     expect((await selectPreset(root, null)).name).toBe("cra");
   });
@@ -71,7 +77,10 @@ describe("selectPreset", () => {
 
   it("prefers a build over serving sources when both could apply", async () => {
     const root = await project({
-      "package.json": packageJson({ devDependencies: { vite: "^6" }, scripts: { build: "vite build" } }),
+      "package.json": packageJson({
+        devDependencies: { vite: "^6" },
+        scripts: { build: "vite build" },
+      }),
       "index.html": "<div id=app></div>",
     });
     expect((await selectPreset(root, null)).name).not.toBe("static");

@@ -1,7 +1,13 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BuildFailure } from "./failure.js";
-import { assertDeployable, assertWithin, checksumOf, contentTypeOf, type SiteFile } from "./output.js";
+import {
+  assertDeployable,
+  assertWithin,
+  checksumOf,
+  contentTypeOf,
+  type SiteFile,
+} from "./output.js";
 
 function file(relativePath: string, sizeBytes = 10): SiteFile {
   return { relativePath, absolutePath: path.join("/site", relativePath), sizeBytes };

@@ -11,7 +11,12 @@ export {
   mapDeploymentRow,
   transitionDeployment,
 } from "./deployment.js";
-export type { Deployment, DeploymentStatus, TransitionColumns } from "./deployment.js";
+export type {
+  Deployment,
+  DeploymentRow,
+  DeploymentStatus,
+  TransitionColumns,
+} from "./deployment.js";
 
 export { DEPLOYMENT_ID_PATTERN, isDeploymentId, newDeploymentId } from "./id.js";
 

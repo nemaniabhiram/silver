@@ -11,10 +11,7 @@ export function UrlCard({ deployment }: { deployment: Deployment }) {
           <CopyButton value={deployment.url} />
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => window.open(deployment.url, "_blank", "noopener")}
-        >
+        <Button variant="primary" onClick={() => window.open(deployment.url, "_blank", "noopener")}>
           Visit →
         </Button>
       </div>
@@ -27,7 +24,8 @@ export function UrlCard({ deployment }: { deployment: Deployment }) {
 }
 
 function describe({ outputFileCount, outputSizeBytes, expiresAt }: Deployment): string {
-  const size = outputSizeBytes === null ? null : `${Math.max(1, Math.round(outputSizeBytes / 1024))} KB`;
+  const size =
+    outputSizeBytes === null ? null : `${Math.max(1, Math.round(outputSizeBytes / 1024))} KB`;
   const files = outputFileCount === null ? null : `${outputFileCount} files`;
   const expiry = `Expires ${new Date(expiresAt).toLocaleDateString(undefined, {
     month: "short",

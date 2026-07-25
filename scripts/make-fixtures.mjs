@@ -98,7 +98,7 @@ const fixtures = {
       {
         name: "hanging-fixture",
         private: true,
-        scripts: { build: "node -e \"setTimeout(()=>{},1e9)\"" },
+        scripts: { build: 'node -e "setTimeout(()=>{},1e9)"' },
       },
       null,
       2,

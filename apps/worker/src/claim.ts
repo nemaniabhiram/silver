@@ -1,4 +1,4 @@
-import { type Deployment, mapDeploymentRow } from "@silver/shared";
+import { type Deployment, type DeploymentRow, mapDeploymentRow } from "@silver/shared";
 import type pg from "pg";
 
 /**
@@ -7,7 +7,7 @@ import type pg from "pg";
  * a row another is already taking rather than blocking behind it.
  */
 export async function claimNextQueuedDeployment(pool: pg.Pool): Promise<Deployment | null> {
-  const result = await pool.query(
+  const result = await pool.query<DeploymentRow>(
     `UPDATE deployments
      SET status = 'BUILDING', started_at = now(), attempt_count = attempt_count + 1
      WHERE id = (

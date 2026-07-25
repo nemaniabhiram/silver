@@ -12,7 +12,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const options = parseArgs(process.argv.slice(2));
 const apiBase = options.api ?? "http://localhost:4000";
 const siteHost = options["site-host"] ?? "localhost:4001";
-const siteProtocol = options["site-protocol"] ?? (siteHost.startsWith("localhost") ? "http" : "https");
+const siteProtocol =
+  options["site-protocol"] ?? (siteHost.startsWith("localhost") ? "http" : "https");
 const deadlineMs = Number(options.timeout ?? 120_000);
 
 const checks = [];
@@ -44,7 +45,11 @@ async function run() {
 
   console.log(`  deployment ${deployment.id}`);
   const ready = await waitForReady(deployment.id);
-  check("reached READY", ready.status === "READY", `ended as ${ready.status}: ${ready.errorMessage ?? ""}`);
+  check(
+    "reached READY",
+    ready.status === "READY",
+    `ended as ${ready.status}: ${ready.errorMessage ?? ""}`,
+  );
 
   if (ready.status !== "READY") {
     throw new Error("deployment never became ready");
@@ -62,10 +67,18 @@ async function run() {
     (page.headers.get("content-type") ?? "").startsWith("text/html"),
     page.headers.get("content-type"),
   );
-  check("revalidates html", page.headers.get("cache-control") === "no-cache", page.headers.get("cache-control"));
+  check(
+    "revalidates html",
+    page.headers.get("cache-control") === "no-cache",
+    page.headers.get("cache-control"),
+  );
 
   const image = await siteFetch(deployment.id, "/pixel.png");
-  check("serves images as images", image.headers.get("content-type") === "image/png", image.headers.get("content-type"));
+  check(
+    "serves images as images",
+    image.headers.get("content-type") === "image/png",
+    image.headers.get("content-type"),
+  );
 
   const script = await siteFetch(deployment.id, "/app.js");
   check(
@@ -89,7 +102,11 @@ async function run() {
 
   const clientRoute = await siteFetch(deployment.id, "/some/client/route");
   const routeBody = await clientRoute.text();
-  check("falls back to index.html for client routes", routeBody.includes("silver static fixture"), `HTTP ${clientRoute.status}`);
+  check(
+    "falls back to index.html for client routes",
+    routeBody.includes("silver static fixture"),
+    `HTTP ${clientRoute.status}`,
+  );
 
   const missingAsset = await siteFetch(deployment.id, "/missing.png");
   check("404s a missing asset", missingAsset.status === 404, `HTTP ${missingAsset.status}`);

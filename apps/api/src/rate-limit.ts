@@ -22,7 +22,12 @@ export class RateLimiter {
   private readonly windows = new Map<string, Window>();
 
   /** Counts the request against the window. */
-  consume(key: string, limit: number, windowMs: number, now: number = Date.now()): RateLimitVerdict {
+  consume(
+    key: string,
+    limit: number,
+    windowMs: number,
+    now: number = Date.now(),
+  ): RateLimitVerdict {
     return this.evaluate(key, limit, windowMs, now, true);
   }
 

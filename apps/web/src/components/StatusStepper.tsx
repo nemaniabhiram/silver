@@ -38,17 +38,13 @@ export function StatusStepper({ status, errorMessage }: StatusStepperProps) {
               <div className="flex items-center gap-2">
                 <Node position={position} reached={reached} status={status} stopped={isStopped} />
                 <span
-                  className={`text-small ${
-                    position <= reached ? "text-text" : "text-text-faint"
-                  }`}
+                  className={`text-small ${position <= reached ? "text-text" : "text-text-faint"}`}
                 >
                   {label}
                 </span>
               </div>
               {position < STEPS.length && (
-                <span
-                  className={`h-px flex-1 ${position < reached ? "bg-text-dim" : "bg-line"}`}
-                />
+                <span className={`h-px flex-1 ${position < reached ? "bg-text-dim" : "bg-line"}`} />
               )}
             </li>
           );

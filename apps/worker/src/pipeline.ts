@@ -16,12 +16,7 @@ import { buildInSandbox, ensureBuilderImage } from "./docker.js";
 import { extractZip } from "./extract.js";
 import { BuildFailure } from "./failure.js";
 import { announce, createLogWriter } from "./logs.js";
-import {
-  assertDeployable,
-  assertWithin,
-  collectSiteFiles,
-  uploadSite,
-} from "./output.js";
+import { assertDeployable, assertWithin, collectSiteFiles, uploadSite } from "./output.js";
 import { selectPreset } from "./presets.js";
 
 /** Multiplied by the attempt number, so waits grow as hope fades. */

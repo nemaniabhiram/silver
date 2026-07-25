@@ -18,9 +18,7 @@ export function LogTerminal({ logs }: { logs: LogLine[] }) {
   return (
     <section className="rounded-card border border-line bg-surface">
       <header className="flex items-center justify-between border-b border-line px-4 py-2">
-        <span className="text-caption uppercase tracking-[0.05em] text-text-faint">
-          Build logs
-        </span>
+        <span className="text-caption uppercase tracking-[0.05em] text-text-faint">Build logs</span>
         <CopyButton value={logs.map((line) => line.message).join("\n")} />
       </header>
 

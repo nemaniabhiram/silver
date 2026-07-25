@@ -23,10 +23,7 @@ export function useDeployment(id: string): DeploymentView {
 
   const refresh = useCallback(async () => {
     try {
-      const [next, newLogs] = await Promise.all([
-        api.get(id),
-        api.logs(id, lastLogId.current),
-      ]);
+      const [next, newLogs] = await Promise.all([api.get(id), api.logs(id, lastLogId.current)]);
 
       setDeployment(next);
       setError(null);

@@ -1,4 +1,4 @@
-import { mapDeploymentRow, transitionDeployment } from "@silver/shared";
+import { type DeploymentRow, mapDeploymentRow, transitionDeployment } from "@silver/shared";
 import type { WorkerDependencies } from "./pipeline.js";
 import { announce } from "./logs.js";
 
@@ -11,13 +11,10 @@ const RETRY_BACKOFF_SECONDS = 30;
  * the rows that have been building longer than any build could take are treated
  * as the crash leftovers they are.
  */
-export async function recoverStaleBuilds({
-  config,
-  pool,
-}: WorkerDependencies): Promise<number> {
+export async function recoverStaleBuilds({ config, pool }: WorkerDependencies): Promise<number> {
   const staleAfterSeconds = config.BUILD_TIMEOUT_SECONDS + GRACE_SECONDS;
 
-  const stale = await pool.query(
+  const stale = await pool.query<DeploymentRow>(
     `SELECT * FROM deployments
      WHERE status = 'BUILDING' AND started_at < now() - make_interval(secs => $1)`,
     [staleAfterSeconds],

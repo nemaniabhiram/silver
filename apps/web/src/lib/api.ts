@@ -1,12 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
-export type DeploymentStatus =
-  | "QUEUED"
-  | "BUILDING"
-  | "READY"
-  | "FAILED"
-  | "CANCELLED"
-  | "EXPIRED";
+export type DeploymentStatus = "QUEUED" | "BUILDING" | "READY" | "FAILED" | "CANCELLED" | "EXPIRED";
 
 export interface Deployment {
   id: string;
@@ -53,7 +47,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
+    const body: unknown = await response.json().catch(() => null);
     const error = (body as { error?: { code: string; message: string } } | null)?.error;
     throw new ApiError(error?.code ?? "INTERNAL", error?.message ?? "Something went wrong.");
   }

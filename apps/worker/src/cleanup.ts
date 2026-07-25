@@ -1,9 +1,11 @@
+import { DeleteObjectsCommand, ListObjectsV2Command, type S3Client } from "@aws-sdk/client-s3";
 import {
-  DeleteObjectsCommand,
-  ListObjectsV2Command,
-  type S3Client,
-} from "@aws-sdk/client-s3";
-import { mapDeploymentRow, sitePrefix, sourceKey, transitionDeployment } from "@silver/shared";
+  type DeploymentRow,
+  mapDeploymentRow,
+  sitePrefix,
+  sourceKey,
+  transitionDeployment,
+} from "@silver/shared";
 import type { WorkerDependencies } from "./pipeline.js";
 
 const DELETE_BATCH = 1000;
@@ -17,12 +19,10 @@ const DELETE_BATCH = 1000;
  * This is also why retry and redeploy are illegal from EXPIRED: the source
  * archive they would need is deleted here.
  */
-export async function expireOldDeployments(
-  dependencies: WorkerDependencies,
-): Promise<number> {
+export async function expireOldDeployments(dependencies: WorkerDependencies): Promise<number> {
   const { pool } = dependencies;
 
-  const expired = await pool.query(
+  const expired = await pool.query<DeploymentRow>(
     `SELECT * FROM deployments
      WHERE (status = 'READY' AND expires_at < now())
         OR (status IN ('FAILED','CANCELLED') AND expires_at < now())`,

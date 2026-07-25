@@ -66,7 +66,10 @@ export async function buildInSandbox(run: SandboxRun): Promise<void> {
   }
 }
 
-export async function ensureBuilderImage(image: string, onOutput: (line: string) => void): Promise<void> {
+export async function ensureBuilderImage(
+  image: string,
+  onOutput: (line: string) => void,
+): Promise<void> {
   const inspect = await spawnDocker(["image", "inspect", image], () => {});
   if (inspect === 0) {
     return;

@@ -168,14 +168,18 @@ function headline(stage: Stage): string {
 }
 
 function Spinner() {
-  return (
-    <span className="size-5 animate-spin rounded-full border-2 border-line border-t-text" />
-  );
+  return <span className="size-5 animate-spin rounded-full border-2 border-line border-t-text" />;
 }
 
 function GlobeGlyph() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-5 text-text">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className="size-5 text-text"
+    >
       <circle cx="12" cy="12" r="9" />
       <path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18" />
     </svg>

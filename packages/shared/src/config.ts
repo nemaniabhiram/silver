@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-const flag = z
-  .enum(["true", "false"])
-  .transform((value) => value === "true");
+const flag = z.enum(["true", "false"]).transform((value) => value === "true");
 
 const positiveInt = z.coerce.number().int().positive();
 const nonNegativeInt = z.coerce.number().int().nonnegative();

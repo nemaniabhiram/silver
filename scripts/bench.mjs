@@ -41,9 +41,12 @@ console.log(`\n== serve hot path, ${loadSeconds}s at concurrency ${concurrency} 
 const { completed, latencies } = await loadTest(liveId);
 
 latencies.sort((a, b) => a - b);
-const at = (p) => latencies[Math.min(latencies.length - 1, Math.floor((latencies.length * p) / 100))];
+const at = (p) =>
+  latencies[Math.min(latencies.length - 1, Math.floor((latencies.length * p) / 100))];
 console.log(`  ${completed} requests -> ${(completed / loadSeconds).toFixed(0)} req/s`);
-console.log(`  p50 ${at(50).toFixed(1)} ms · p95 ${at(95).toFixed(1)} ms · p99 ${at(99).toFixed(1)} ms`);
+console.log(
+  `  p50 ${at(50).toFixed(1)} ms · p95 ${at(95).toFixed(1)} ms · p99 ${at(99).toFixed(1)} ms`,
+);
 console.log(
   "\nMethodology: loopback, local MinIO, network RTT excluded. Numbers are\nsingle-node capacity on the machine running this script.",
 );
@@ -55,7 +58,9 @@ async function deployAndAwaitFirstByte(fixture) {
   form.append("file", new Blob([zip], { type: "application/zip" }), "site.zip");
 
   const startedAt = performance.now();
-  const created = await (await fetch(`${apiBase}/deployments`, { method: "POST", body: form })).json();
+  const created = await (
+    await fetch(`${apiBase}/deployments`, { method: "POST", body: form })
+  ).json();
   if (!created.id) {
     throw new Error(`upload refused: ${JSON.stringify(created)}`);
   }
@@ -129,9 +134,14 @@ async function assertStackUp() {
   ];
 
   for (const [url, name] of probes) {
-    const ok = await fetch(url).then((r) => r.ok, () => false);
+    const ok = await fetch(url).then(
+      (r) => r.ok,
+      () => false,
+    );
     if (!ok) {
-      console.error(`${name} is not answering at ${url} — start the stack first (pnpm infra:up && pnpm dev).`);
+      console.error(
+        `${name} is not answering at ${url} — start the stack first (pnpm infra:up && pnpm dev).`,
+      );
       process.exit(1);
     }
   }
