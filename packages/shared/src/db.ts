@@ -17,7 +17,21 @@ export const MIGRATIONS_DIR = resolve(
 const MIGRATION_LOCK_ID = 7734001;
 
 export function createPool(config: Config): pg.Pool {
-  return new Pool({ connectionString: config.DATABASE_URL, max: 5 });
+  const pool = new Pool({ connectionString: config.DATABASE_URL, max: 5 });
+
+  /**
+   * A client sitting idle in the pool when Postgres restarts or drops the
+   * connection raises an `error` event on the pool itself, and an unheard
+   * `error` event is how EventEmitter kills a process. Postgres restarting is
+   * not a reason for every service to exit: the pool discards the dead client
+   * and the next query opens a fresh one, so this is worth a line in the log
+   * and nothing more.
+   */
+  pool.on("error", (error) => {
+    console.error("[db] idle connection lost", error.message);
+  });
+
+  return pool;
 }
 
 export async function pingDatabase(pool: pg.Pool): Promise<void> {

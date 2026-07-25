@@ -60,9 +60,18 @@ export async function zipFiles(
     archive.file(path, file);
   }
 
-  return archive.generateAsync({ type: "blob", compression: "DEFLATE" }, ({ percent }) =>
-    onProgress?.(percent / 100),
-  );
+  // generateAsync reports once per internal chunk, which is thousands of calls
+  // for a large drop. Only whole percents are passed on, because a re-render per
+  // chunk would trade one kind of stutter for another and nothing finer shows.
+  let reported = -1;
+
+  return archive.generateAsync({ type: "blob", compression: "DEFLATE" }, ({ percent }) => {
+    const whole = Math.floor(percent);
+    if (whole > reported) {
+      reported = whole;
+      onProgress?.(whole / 100);
+    }
+  });
 }
 
 export function totalBytes(files: DroppedFile[]): number {
