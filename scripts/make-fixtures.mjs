@@ -20,6 +20,28 @@ const PIXEL_PNG = Buffer.from(
   "base64",
 );
 
+/**
+ * A script big enough to be worth compressing, which the real one at fifty
+ * bytes was not. Repetitive on purpose: it stands in for a bundle, and a bundle
+ * is what compression exists for.
+ */
+function bundleLikeScript() {
+  const widgets = Array.from(
+    { length: 40 },
+    (_, index) => `
+export function renderWidget${index}(container, options = {}) {
+  const element = document.createElement("section");
+  element.className = "widget widget--${index}";
+  element.dataset.index = "${index}";
+  element.textContent = options.label ?? "widget ${index}";
+  container.appendChild(element);
+  return element;
+}`,
+  ).join("\n");
+
+  return `document.querySelector('h1').dataset.ready = 'true';\n${widgets}\n`;
+}
+
 const fixtures = {
   "static-site.zip": {
     "index.html": `<!doctype html>
@@ -37,7 +59,9 @@ const fixtures = {
 </html>
 `,
     "style.css": "body { background: #0a0a0a; color: #fafafa; font-family: system-ui; }\n",
-    "app.js": "document.querySelector('h1').dataset.ready = 'true';\n",
+    // Sized past the compression floor on purpose: a 50 byte script would never
+    // be compressed, so the smoke checks for it would prove nothing.
+    "app.js": bundleLikeScript(),
     "pixel.png": PIXEL_PNG,
   },
 

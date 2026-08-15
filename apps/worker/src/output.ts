@@ -1,13 +1,45 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { brotliCompress, constants } from "node:zlib";
+import { promisify } from "node:util";
 import { PutObjectCommand, type S3Client } from "@aws-sdk/client-s3";
-import { siteKey } from "@silver/shared";
+import { compressedKey, siteKey } from "@silver/shared";
 import mime from "mime-types";
 import { BuildFailure } from "./failure.js";
 
 const MAX_FILES = 10_000;
 const UPLOAD_CONCURRENCY = 8;
+
+/**
+ * Formats worth compressing. Everything absent is either already compressed,
+ * where Brotli spends CPU to make the file very slightly larger, or too rare to
+ * matter.
+ */
+const COMPRESSIBLE = new Set([
+  "html",
+  "css",
+  "js",
+  "mjs",
+  "json",
+  "svg",
+  "txt",
+  "xml",
+  "map",
+  "webmanifest",
+  "ico",
+]);
+
+/** Below this the framing costs more than the compression saves. */
+const MIN_COMPRESS_BYTES = 1024;
+
+/**
+ * Quality 9 rather than the maximum of 11: 11 costs several times the CPU for a
+ * few percent, and that time is a person watching a build.
+ */
+const BROTLI_QUALITY = 9;
+
+const compress = promisify(brotliCompress);
 
 export interface SiteFile {
   relativePath: string;
@@ -78,6 +110,11 @@ export function assertDeployable(files: SiteFile[], maxBytes: number): void {
   }
 }
 
+export function shouldCompress(relativePath: string, sizeBytes: number): boolean {
+  const extension = relativePath.split(".").pop()?.toLowerCase() ?? "";
+  return sizeBytes >= MIN_COMPRESS_BYTES && COMPRESSIBLE.has(extension);
+}
+
 export async function uploadSite(
   storage: S3Client,
   bucket: string,
@@ -100,6 +137,11 @@ export async function uploadSite(
         }),
       );
 
+      await uploadCompressedTwin(storage, bucket, deploymentId, file, body);
+
+      // The fingerprint covers the original bytes only. Hashing what Brotli
+      // produced would tie it to the compression settings, so raising the
+      // quality later would make every site on the platform look changed.
       digests.set(file.relativePath, createHash("sha256").update(body).digest("hex"));
     }
   });
@@ -111,6 +153,45 @@ export async function uploadSite(
     fileCount: files.length,
     checksum: checksumOf(files, digests),
   };
+}
+
+/**
+ * Compressing once here rather than on every request is the whole point: the
+ * serving path stays a single read streamed through, and the work is paid for
+ * by one build instead of by every visitor.
+ */
+async function uploadCompressedTwin(
+  storage: S3Client,
+  bucket: string,
+  deploymentId: string,
+  file: SiteFile,
+  body: Buffer,
+): Promise<void> {
+  if (!shouldCompress(file.relativePath, file.sizeBytes)) {
+    return;
+  }
+
+  const compressed = await compress(body, {
+    params: { [constants.BROTLI_PARAM_QUALITY]: BROTLI_QUALITY },
+  });
+
+  // Compression does not always win. When it does not, serve finds nothing and
+  // falls back to the original, which needs no special case anywhere.
+  if (compressed.length >= body.length) {
+    return;
+  }
+
+  await storage.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: compressedKey(siteKey(deploymentId, file.relativePath)),
+      Body: compressed,
+      // The type of what it decompresses to, not of the .br name, which mime
+      // does not recognise and would call an octet-stream.
+      ContentType: contentTypeOf(file.relativePath),
+      ContentEncoding: "br",
+    }),
+  );
 }
 
 /** Content addressing over the whole tree: same files in, same digest out. */

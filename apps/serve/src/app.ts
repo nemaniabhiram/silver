@@ -3,6 +3,7 @@ import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import {
   type Config,
   type Logger,
+  compressedKey,
   loggerFor,
   pingDatabase,
   requestId,
@@ -12,6 +13,7 @@ import express, { type ErrorRequestHandler, type Express, type Response } from "
 import mime from "mime-types";
 import type pg from "pg";
 import { cacheControlFor } from "./caching.js";
+import { acceptsBrotli, varyOnEncoding } from "./encoding.js";
 import { DeploymentLookup } from "./lookup.js";
 import { EXPIRED_PAGE, NOT_FOUND_PAGE, UNAVAILABLE_PAGE } from "./pages.js";
 import { deploymentIdFromHost, looksLikeClientRoute, storageKeyForPath } from "./routing.js";
@@ -69,15 +71,16 @@ export function createApp({ config, pool, storage, log }: Dependencies): Express
     }
 
     const ifNoneMatch = request.headers["if-none-match"];
-    const requested = await fetchObject(storage, config.S3_BUCKET, key, ifNoneMatch);
+    const wantsBrotli = acceptsBrotli(request.headers["accept-encoding"]);
+    const requested = await fetchVariant(storage, config.S3_BUCKET, key, ifNoneMatch, wantsBrotli);
 
-    if (requested === "not-modified") {
-      response.status(304).end();
+    if (requested.object === "not-modified") {
+      sendNotModified(response, key);
       return;
     }
 
-    if (requested) {
-      await streamObject(response, key, requested);
+    if (requested.object) {
+      await streamObject(response, key, requested.object, requested.encoding);
       return;
     }
 
@@ -87,19 +90,25 @@ export function createApp({ config, pool, storage, log }: Dependencies): Express
     }
 
     const indexKey = siteKey(deploymentId, "index.html");
-    const fallback = await fetchObject(storage, config.S3_BUCKET, indexKey, ifNoneMatch);
+    const fallback = await fetchVariant(
+      storage,
+      config.S3_BUCKET,
+      indexKey,
+      ifNoneMatch,
+      wantsBrotli,
+    );
 
-    if (fallback === "not-modified") {
-      response.status(304).end();
+    if (fallback.object === "not-modified") {
+      sendNotModified(response, indexKey);
       return;
     }
 
-    if (!fallback) {
+    if (!fallback.object) {
       sendPage(response, 404, NOT_FOUND_PAGE);
       return;
     }
 
-    await streamObject(response, indexKey, fallback);
+    await streamObject(response, indexKey, fallback.object, fallback.encoding);
   });
 
   app.use(handleErrors(log));
@@ -156,15 +165,57 @@ async function fetchObject(
   }
 }
 
+type Encoding = "br" | null;
+
+/**
+ * Prefers the compressed twin the worker may have written, and falls back to
+ * the original whenever it is absent or unwanted. The conditional header goes
+ * to whichever object is tried, so a browser holding the Brotli ETag
+ * revalidates against the Brotli object.
+ */
+async function fetchVariant(
+  storage: S3Client,
+  bucket: string,
+  key: string,
+  ifNoneMatch: string | undefined,
+  wantsBrotli: boolean,
+): Promise<{ object: StoredObject | "not-modified" | null; encoding: Encoding }> {
+  if (wantsBrotli && varyOnEncoding(key)) {
+    const compressed = await fetchObject(storage, bucket, compressedKey(key), ifNoneMatch);
+    if (compressed) {
+      return { object: compressed, encoding: "br" };
+    }
+  }
+
+  return { object: await fetchObject(storage, bucket, key, ifNoneMatch), encoding: null };
+}
+
+/** A 304 carries no body but still has to say what the answer varied on. */
+function sendNotModified(response: Response, key: string): void {
+  setSafetyHeaders(response);
+  setVaryIfCompressible(response, key);
+  response.status(304).end();
+}
+
 /**
  * Headers follow the resolved key, not the request path: "/" carries no
  * extension to read a type or a caching rule from, but the key it resolved to
  * ends in index.html.
  */
-async function streamObject(response: Response, key: string, object: StoredObject): Promise<void> {
+async function streamObject(
+  response: Response,
+  key: string,
+  object: StoredObject,
+  encoding: Encoding,
+): Promise<void> {
   setSafetyHeaders(response);
+  setVaryIfCompressible(response, key);
   response.setHeader("Content-Type", mime.lookup(key) || "application/octet-stream");
   response.setHeader("Cache-Control", cacheControlFor(key));
+
+  if (encoding) {
+    response.setHeader("Content-Encoding", encoding);
+  }
 
   if (object.contentLength !== undefined) {
     response.setHeader("Content-Length", object.contentLength);
@@ -203,6 +254,18 @@ function sendPage(response: Response, status: number, html: string): void {
 function setSafetyHeaders(response: Response): void {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+}
+
+/**
+ * Set whether or not the compressed twin was the one served. A shared cache
+ * that stored either answer without this would hand it to the next client
+ * regardless of what that client can decode, and Brotli bytes reaching a
+ * browser expecting plain text is unreadable garbage.
+ */
+function setVaryIfCompressible(response: Response, key: string): void {
+  if (varyOnEncoding(key)) {
+    response.setHeader("Vary", "Accept-Encoding");
+  }
 }
 
 function statusCodeOf(error: unknown): number | undefined {

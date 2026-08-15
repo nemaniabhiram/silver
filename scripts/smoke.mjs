@@ -3,6 +3,7 @@
 // Usage: node scripts/smoke.mjs [--api http://localhost:4000] [--site-host localhost:4001]
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
+import { brotliDecompressSync } from "node:zlib";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,6 +100,32 @@ async function run() {
     styles.headers.get("content-type"),
   );
 
+  const squeezed = await siteFetch(deployment.id, "/app.js", { "Accept-Encoding": "br" });
+  check(
+    "compresses scripts for a client that takes brotli",
+    squeezed.headers.get("content-encoding") === "br",
+    squeezed.headers.get("content-encoding") ?? "none",
+  );
+  check(
+    "says the answer varied on the encoding",
+    (squeezed.headers.get("vary") ?? "").includes("Accept-Encoding"),
+    squeezed.headers.get("vary"),
+  );
+
+  const compressedBody = brotliDecompressSync(Buffer.from(await squeezed.arrayBuffer()));
+  const plainScript = await siteFetch(deployment.id, "/app.js", { "Accept-Encoding": "identity" });
+  const plainBody = Buffer.from(await plainScript.arrayBuffer());
+  check(
+    "the compressed file decompresses to exactly the original",
+    compressedBody.equals(plainBody),
+    `${compressedBody.length} vs ${plainBody.length} bytes`,
+  );
+  check(
+    "serves the original to a client that refuses brotli",
+    plainScript.headers.get("content-encoding") === null,
+    plainScript.headers.get("content-encoding") ?? "none",
+  );
+
   const etag = page.headers.get("etag");
   if (etag) {
     const revalidated = await siteFetch(deployment.id, "/", { "If-None-Match": etag });
@@ -148,6 +175,9 @@ function siteFetch(deploymentId, path = "/", headers = {}) {
             status: response.statusCode,
             headers: { get: (name) => response.headers[name.toLowerCase()] ?? null },
             text: async () => body.toString("utf8"),
+            // Raw bytes, undecoded, which is the point when the checks are
+            // about what the encoding headers claim.
+            arrayBuffer: async () => body,
           });
         });
       },

@@ -36,6 +36,15 @@ export function siteKey(deploymentId: string, relativePath: string): string {
   return `sites/${deploymentId}/${relativePath}`;
 }
 
+/**
+ * The compressed twin of a stored object, kept beside it rather than in place
+ * of it, since a client that cannot take Brotli still has to get a working
+ * file. The worker writes these and serve reads them, so the name lives here.
+ */
+export function compressedKey(key: string): string {
+  return `${key}.br`;
+}
+
 export function sitePrefix(deploymentId: string): string {
   return `sites/${deploymentId}/`;
 }

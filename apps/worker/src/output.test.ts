@@ -6,6 +6,7 @@ import {
   assertWithin,
   checksumOf,
   contentTypeOf,
+  shouldCompress,
   type SiteFile,
 } from "./output.js";
 
@@ -90,5 +91,37 @@ describe("contentTypeOf", () => {
 
   it("falls back rather than mislabel an unknown file", () => {
     expect(contentTypeOf("LICENSE")).toBe("application/octet-stream");
+  });
+});
+
+describe("shouldCompress", () => {
+  const KB = 1024;
+
+  it("compresses the text formats a site is mostly made of", () => {
+    expect(shouldCompress("index.html", 4 * KB)).toBe(true);
+    expect(shouldCompress("assets/app.js", 200 * KB)).toBe(true);
+    expect(shouldCompress("assets/app.css", 20 * KB)).toBe(true);
+    expect(shouldCompress("data.json", 2 * KB)).toBe(true);
+    expect(shouldCompress("logo.svg", 2 * KB)).toBe(true);
+  });
+
+  /** Brotli spends CPU on these to make them very slightly larger. */
+  it("leaves formats that already carry their own compression", () => {
+    expect(shouldCompress("photo.png", 500 * KB)).toBe(false);
+    expect(shouldCompress("photo.jpg", 500 * KB)).toBe(false);
+    expect(shouldCompress("font.woff2", 40 * KB)).toBe(false);
+    expect(shouldCompress("clip.mp4", 5000 * KB)).toBe(false);
+    expect(shouldCompress("archive.zip", 100 * KB)).toBe(false);
+  });
+
+  it("skips files too small for the saving to pay for the framing", () => {
+    expect(shouldCompress("tiny.js", 200)).toBe(false);
+    expect(shouldCompress("tiny.js", KB - 1)).toBe(false);
+    expect(shouldCompress("tiny.js", KB)).toBe(true);
+  });
+
+  it("reads the extension regardless of case or path depth", () => {
+    expect(shouldCompress("deep/nested/PAGE.HTML", 4 * KB)).toBe(true);
+    expect(shouldCompress("no-extension", 4 * KB)).toBe(false);
   });
 });

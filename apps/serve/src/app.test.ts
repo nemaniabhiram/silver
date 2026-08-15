@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import { brotliCompressSync } from "node:zlib";
 import type { S3Client } from "@aws-sdk/client-s3";
 import { createLogger, loadConfig } from "@silver/shared";
 import type pg from "pg";
@@ -28,6 +29,39 @@ function storageServing(body: string): S3Client {
         ETag: '"abc123"',
       }),
   } as unknown as S3Client;
+}
+
+interface StorageSpy {
+  client: S3Client;
+  keys: string[];
+}
+
+/**
+ * Records the keys asked for and serves only those it was told exist, so a test
+ * can watch which variant was tried first and what happened when it was absent.
+ */
+function storageHolding(available: Record<string, Buffer>): StorageSpy {
+  const keys: string[] = [];
+
+  const client = {
+    send: (command: { input: { Key: string } }) => {
+      const key = command.input.Key;
+      keys.push(key);
+
+      const body = available[key];
+      if (body === undefined) {
+        return Promise.reject(Object.assign(new Error("missing"), { name: "NoSuchKey" }));
+      }
+
+      return Promise.resolve({
+        Body: Readable.from([body]),
+        ContentLength: body.length,
+        ETag: `"${key}"`,
+      });
+    },
+  } as unknown as S3Client;
+
+  return { client, keys };
 }
 
 const log = createLogger("serve-test");
@@ -139,5 +173,108 @@ describe("safety headers", () => {
 
     expect(response.status).toBe(503);
     expectSafe(response.headers);
+  });
+});
+
+describe("serving the compressed twin", () => {
+  const RAW = `sites/${DEPLOYMENT_ID}/index.html`;
+  const BROTLI = `${RAW}.br`;
+  const PAGE = "<!doctype html><title>a real page</title>";
+
+  const bothVariants = () => ({
+    [RAW]: Buffer.from(PAGE),
+    [BROTLI]: brotliCompressSync(Buffer.from(PAGE)),
+  });
+
+  it("prefers the compressed object when the client takes brotli", async () => {
+    const storage = storageHolding(bothVariants());
+
+    const response = await request(appWith(poolReturning("READY"), storage.client))
+      .get("/index.html")
+      .set("Host", HOST)
+      .set("Accept-Encoding", "gzip, br");
+
+    expect(storage.keys[0]).toBe(BROTLI);
+    expect(response.headers["content-encoding"]).toBe("br");
+    expect(response.headers["vary"]).toBe("Accept-Encoding");
+    // Decompressed by the client, so the bytes really were valid Brotli of the
+    // original file and not merely labelled as such.
+    expect(response.text).toBe(PAGE);
+  });
+
+  it("never asks for the compressed object when the client cannot take it", async () => {
+    const storage = storageHolding(bothVariants());
+
+    const response = await request(appWith(poolReturning("READY"), storage.client))
+      .get("/index.html")
+      .set("Host", HOST)
+      .set("Accept-Encoding", "gzip");
+
+    expect(storage.keys).toEqual([RAW]);
+    expect(response.headers["content-encoding"]).toBeUndefined();
+    expect(response.text).toBe(PAGE);
+  });
+
+  /**
+   * Vary belongs on both answers. A cache that stored the plain one without it
+   * would go on handing plain bytes to clients that asked for Brotli, and the
+   * other way round, which is unreadable rather than merely larger.
+   */
+  it("says it varied on the encoding even when it served the plain file", async () => {
+    const storage = storageHolding({ [RAW]: Buffer.from(PAGE) });
+
+    const response = await request(appWith(poolReturning("READY"), storage.client))
+      .get("/index.html")
+      .set("Host", HOST)
+      .set("Accept-Encoding", "gzip");
+
+    expect(response.headers["vary"]).toBe("Accept-Encoding");
+  });
+
+  it("falls back to the original when no compressed twin was written", async () => {
+    const storage = storageHolding({ [RAW]: Buffer.from(PAGE) });
+
+    const response = await request(appWith(poolReturning("READY"), storage.client))
+      .get("/index.html")
+      .set("Host", HOST)
+      .set("Accept-Encoding", "br");
+
+    expect(storage.keys).toEqual([BROTLI, RAW]);
+    expect(response.status).toBe(200);
+    expect(response.headers["content-encoding"]).toBeUndefined();
+    expect(response.text).toBe(PAGE);
+  });
+
+  /**
+   * The two variants are different objects with different ETags, so a
+   * conditional request can never be answered across encodings.
+   */
+  it("tags each variant differently", async () => {
+    const storage = storageHolding(bothVariants());
+    const app = appWith(poolReturning("READY"), storage.client);
+
+    const compressed = await request(app)
+      .get("/index.html")
+      .set("Host", HOST)
+      .set("Accept-Encoding", "br");
+    const plain = await request(app)
+      .get("/index.html")
+      .set("Host", HOST)
+      .set("Accept-Encoding", "identity");
+
+    expect(compressed.headers["etag"]).not.toBe(plain.headers["etag"]);
+  });
+
+  it("leaves formats that are already compressed alone", async () => {
+    const image = `sites/${DEPLOYMENT_ID}/logo.png`;
+    const storage = storageHolding({ [image]: Buffer.from("binary") });
+
+    const response = await request(appWith(poolReturning("READY"), storage.client))
+      .get("/logo.png")
+      .set("Host", HOST)
+      .set("Accept-Encoding", "br");
+
+    expect(storage.keys).toEqual([image]);
+    expect(response.headers["vary"]).toBeUndefined();
   });
 });

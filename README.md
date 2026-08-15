@@ -50,8 +50,11 @@ Measured with `pnpm bench` (the script is in [scripts/bench.mjs](scripts/bench.m
 
 - **Drop → live in under 2 seconds** for a pre-built static site (median 1.5 s over 5 runs, from starting the upload to the first 200 from the live subdomain)
 - **~800 req/s sustained on the serve hot path** at concurrency 50, with p50 59 ms / p99 96 ms
+- **69% fewer bytes over the wire.** Deploying Silver's own production bundle, a full page load goes from 299 KB to 91 KB: the 279 KB JavaScript chunk ships as 84 KB, the 20 KB stylesheet as 6 KB
 
 The serve path stays this flat because status lookups are cached per site per minute, so nearly every request is a single S3 GET streamed through.
+
+Compression is the same story. Files are Brotli-compressed once by the worker and stored beside their originals, so serving one is still a single read streamed through, and the request path does no compression work at all. Assets that already carry their own compression, and anything under a kilobyte, are left alone. A client that does not offer Brotli gets the original, and every response that could have been either says so with `Vary: Accept-Encoding`.
 
 ## Safety
 

@@ -28,6 +28,7 @@ export { loggerFor, requestId } from "./request-id.js";
 export { shutdownOnSignal } from "./shutdown.js";
 
 export {
+  compressedKey,
   createStorageClient,
   ensureBucket,
   pingBucket,

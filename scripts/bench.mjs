@@ -47,9 +47,41 @@ console.log(`  ${completed} requests -> ${(completed / loadSeconds).toFixed(0)} 
 console.log(
   `  p50 ${at(50).toFixed(1)} ms · p95 ${at(95).toFixed(1)} ms · p99 ${at(99).toFixed(1)} ms`,
 );
+console.log("\n== transfer size, compressed against raw ==");
+await reportTransferSizes(liveId);
+
 console.log(
   "\nMethodology: loopback, local MinIO, network RTT excluded. Numbers are\nsingle-node capacity on the machine running this script.",
 );
+
+/**
+ * Compression happens once when a site is built, so this is a property of what
+ * is stored rather than of the request path, and it costs the numbers above
+ * nothing.
+ */
+async function reportTransferSizes(id) {
+  const assets = ["/", "/app.js", "/style.css"];
+  let raw = 0;
+  let compressed = 0;
+
+  for (const path of assets) {
+    const plain = await siteFetch(id, path, { "Accept-Encoding": "identity" });
+    const brotli = await siteFetch(id, path, { "Accept-Encoding": "br" });
+    raw += plain.bytes;
+    compressed += brotli.bytes;
+
+    const saved =
+      plain.bytes === 0 ? 0 : Math.round(((plain.bytes - brotli.bytes) / plain.bytes) * 100);
+    console.log(
+      `  ${path.padEnd(12)} ${String(plain.bytes).padStart(8)} -> ${String(brotli.bytes).padStart(8)}  ${brotli.encoding ?? "uncompressed"} (${saved}%)`,
+    );
+  }
+
+  const saved = Math.round(((raw - compressed) / raw) * 100);
+  console.log(
+    `  ${"total".padEnd(12)} ${String(raw).padStart(8)} -> ${String(compressed).padStart(8)}  (${saved}% smaller)`,
+  );
+}
 
 /** Wall clock from starting the upload to the first 200 from the subdomain. */
 async function deployAndAwaitFirstByte(fixture) {
@@ -106,7 +138,7 @@ async function loadTest(id) {
  * Requests go to loopback with the subdomain in the Host header, because
  * Node's resolver, unlike a browser's, does not map *.localhost.
  */
-function siteFetch(id, path = "/") {
+function siteFetch(id, path = "/", headers = {}) {
   const port = siteHost.split(":")[1] ?? "80";
 
   return new Promise((resolveResponse, rejectResponse) => {
@@ -115,11 +147,22 @@ function siteFetch(id, path = "/") {
         host: "127.0.0.1",
         port: Number(port),
         path,
-        headers: { Host: `${id}.${siteHost}` },
+        headers: { Host: `${id}.${siteHost}`, ...headers },
       },
       (response) => {
-        response.resume();
-        response.on("end", () => resolveResponse({ status: response.statusCode ?? 0 }));
+        // Counted rather than collected: the load test runs thousands of these
+        // and only ever needs the size.
+        let bytes = 0;
+        response.on("data", (chunk) => {
+          bytes += chunk.length;
+        });
+        response.on("end", () =>
+          resolveResponse({
+            status: response.statusCode ?? 0,
+            bytes,
+            encoding: response.headers["content-encoding"] ?? null,
+          }),
+        );
       },
     );
     request.on("error", rejectResponse);
