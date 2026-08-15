@@ -4,11 +4,13 @@ export type { Config } from "./config.js";
 export { MIGRATIONS_DIR, createPool, pingDatabase, runMigrations } from "./db.js";
 
 export {
+  DEPLOYMENT_EVENTS_CHANNEL,
   DEPLOYMENT_STATUSES,
   VALID_TRANSITIONS,
   canTransition,
   deploymentUrl,
   mapDeploymentRow,
+  notifyDeploymentChanged,
   transitionDeployment,
 } from "./deployment.js";
 export type {

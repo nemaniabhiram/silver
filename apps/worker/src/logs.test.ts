@@ -7,16 +7,23 @@ const log = createLogger("test");
 
 function recordingPool() {
   const batches: string[][] = [];
-  const query = vi.fn((_sql: string, values: unknown[]) => {
-    batches.push(values[1] as string[]);
+
+  // Writing a batch also announces it, so only the insert is a batch.
+  const query = vi.fn((sql: string, values: unknown[]) => {
+    if (sql.includes("INSERT INTO deployment_logs")) {
+      batches.push(values[1] as string[]);
+    }
     return Promise.resolve({ rows: [] });
   });
-  return { pool: { query } as unknown as Pool, batches, query };
+
+  const inserts = () => query.mock.calls.filter(([sql]) => sql.includes("INSERT INTO"));
+
+  return { pool: { query } as unknown as Pool, batches, query, inserts };
 }
 
 describe("createLogWriter", () => {
   it("batches rather than writing a row per line", async () => {
-    const { pool, batches, query } = recordingPool();
+    const { pool, batches, inserts } = recordingPool();
     const writer = createLogWriter(pool, "abc1234567", log);
 
     for (let line = 0; line < 60; line += 1) {
@@ -24,7 +31,7 @@ describe("createLogWriter", () => {
     }
     await writer.close();
 
-    expect(query.mock.calls.length).toBeLessThan(60);
+    expect(inserts().length).toBeLessThan(60);
     expect(batches.flat()).toHaveLength(60);
   });
 

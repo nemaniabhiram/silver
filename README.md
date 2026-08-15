@@ -22,6 +22,10 @@ Four small services that never talk to each other directly. All coordination goe
 
 Deployments are a table that doubles as the queue: the worker claims rows with `FOR UPDATE SKIP LOCKED`. There is no message broker and no internal RPC.
 
+Build logs and status changes reach the browser the same way. The worker announces on a Postgres channel, the api listens on it and pushes over Server-Sent Events, and the two still never speak to each other. Each event is identified by the log row's own `bigserial`, which is also what the browser sends back as `Last-Event-ID`, so a dropped connection resumes exactly where it stopped without losing or repeating a line. Polling remains as the fallback, because a proxy that buffers the stream would otherwise leave the page silent.
+
+This is streaming with resumption rather than anything real-time. The worker batches log writes at fifty lines or half a second, which is what keeps a chatty `npm install` to a handful of inserts instead of hundreds, so the floor is around half a second rather than zero. Removing that would mean the worker talking to the api directly, which costs the architecture more than the difference is worth.
+
 ## Running it locally
 
 Requires Node 22, pnpm 10, and Docker Desktop.

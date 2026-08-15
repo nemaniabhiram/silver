@@ -3,11 +3,12 @@ import cors from "cors";
 import express, { type Express } from "express";
 import type { Dependencies } from "./dependencies.js";
 import { createErrorHandler } from "./errors.js";
+import type { DeploymentEvents } from "./events.js";
 import { RateLimiter } from "./rate-limit.js";
 import { createDeploymentsRouter } from "./routes/deployments.js";
 import { createHealthRouter } from "./routes/health.js";
 
-export function createApp(dependencies: Dependencies): Express {
+export function createApp(dependencies: Dependencies, events: DeploymentEvents): Express {
   const app = express();
   const limiter = new RateLimiter(dependencies.pool, dependencies.log);
 
@@ -18,7 +19,7 @@ export function createApp(dependencies: Dependencies): Express {
   app.use(requestId(dependencies.log));
 
   app.use("/healthz", createHealthRouter(dependencies));
-  app.use("/deployments", createDeploymentsRouter(dependencies, limiter));
+  app.use("/deployments", createDeploymentsRouter(dependencies, limiter, events));
 
   app.use(createErrorHandler(dependencies.log));
 

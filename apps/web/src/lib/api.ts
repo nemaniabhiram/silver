@@ -128,6 +128,11 @@ function parse(text: string): unknown {
   }
 }
 
+/** EventSource takes a url rather than a request, so it is built rather than sent. */
+export function eventsUrl(id: string, afterId: number): string {
+  return `${API_URL}/deployments/${id}/events?afterId=${afterId}`;
+}
+
 export const IN_PROGRESS: readonly DeploymentStatus[] = ["QUEUED", "BUILDING"];
 
 export function isInProgress(status: DeploymentStatus): boolean {

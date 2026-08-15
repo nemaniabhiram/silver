@@ -11,6 +11,7 @@ import { type RequestHandler, Router } from "express";
 import { MulterError } from "multer";
 import { z } from "zod";
 import type { Dependencies } from "../dependencies.js";
+import type { DeploymentEvents } from "../events.js";
 import { ApiError } from "../errors.js";
 import { type RateLimiter, rateLimit, tooFast } from "../rate-limit.js";
 import { toDeploymentResource } from "../resource.js";
@@ -20,9 +21,17 @@ import { createUploadMiddleware, discard, looksLikeZip } from "../upload.js";
 const HOUR_MS = 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
+/** A stream is not a request, so it is admitted by how many are already open. */
+const MAX_STREAMS_PER_IP = 5;
+const HEARTBEAT_MS = 20_000;
+
 const PresetOverride = z.enum(["static", "vite", "cra", "npm"]).optional();
 
-export function createDeploymentsRouter(dependencies: Dependencies, limiter: RateLimiter): Router {
+export function createDeploymentsRouter(
+  dependencies: Dependencies,
+  limiter: RateLimiter,
+  events: DeploymentEvents,
+): Router {
   const { config, pool, storage } = dependencies;
   const router = Router();
 
@@ -110,6 +119,85 @@ export function createDeploymentsRouter(dependencies: Dependencies, limiter: Rat
     response.json({ logs, lastId: Number(logs.at(-1)?.id ?? afterId) || 0 });
   });
 
+  /**
+   * The same log lines and status changes the polling endpoints above serve,
+   * pushed as they land instead of asked for every two seconds.
+   *
+   * A notification is only a doorbell: every wake re-reads from the cursor, so
+   * the first send, a live update and a resume after a dropped connection are
+   * all the same path. The event id is the log row's own id, which is what lets
+   * the browser hand back Last-Event-ID and carry on exactly where it stopped.
+   */
+  router.get("/:id/events", async (request, response) => {
+    const deployment = await requireDeployment(request.params.id);
+    const ip = request.ip ?? "";
+
+    if (events.streamsFrom(ip) >= MAX_STREAMS_PER_IP) {
+      throw new ApiError("RATE_LIMITED", "Too many open log streams. Close one and try again.");
+    }
+
+    response.setHeader("Content-Type", "text/event-stream");
+    response.setHeader("Cache-Control", "no-cache");
+    response.setHeader("Connection", "keep-alive");
+    // Proxies buffer by default, which holds the whole stream until the build
+    // ends and looks exactly like the feature not working.
+    response.setHeader("X-Accel-Buffering", "no");
+    response.flushHeaders();
+
+    let cursor = startingCursor(request);
+    let lastStatus = "";
+    let sending = false;
+    let again = false;
+
+    async function send(): Promise<void> {
+      // Notifications can arrive faster than a read completes. Rather than
+      // overlap them, the one in flight is asked to go round again.
+      if (sending) {
+        again = true;
+        return;
+      }
+
+      sending = true;
+      try {
+        do {
+          again = false;
+
+          const logs = await readDeploymentLogs(pool, deployment.id, cursor);
+          for (const line of logs) {
+            cursor = Number(line.id);
+            response.write(`id: ${line.id}\nevent: log\ndata: ${JSON.stringify(line)}\n\n`);
+          }
+
+          const current = await findDeployment(pool, deployment.id);
+          if (current && current.status !== lastStatus) {
+            lastStatus = current.status;
+            // No id on a status event: the browser stores the last id it saw as
+            // its resume point, and a non-log id there would corrupt it.
+            response.write(
+              `event: status\ndata: ${JSON.stringify(toDeploymentResource(current, config))}\n\n`,
+            );
+          }
+        } while (again);
+      } finally {
+        sending = false;
+      }
+    }
+
+    await send();
+
+    const unsubscribe = events.subscribe(deployment.id, ip, () => {
+      void send().catch(() => undefined);
+    });
+
+    // Intermediaries close a connection that has said nothing for long enough.
+    const heartbeat = setInterval(() => response.write(": ping\n\n"), HEARTBEAT_MS);
+
+    request.on("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
+
   router.post("/:id/retry", limitWrites, async (request, response) => {
     const deployment = await requireDeployment(request.params.id);
 
@@ -187,6 +275,23 @@ export function createDeploymentsRouter(dependencies: Dependencies, limiter: Rat
   }
 
   return router;
+}
+
+/**
+ * Where to resume from. The browser resends Last-Event-ID on its own
+ * reconnects; a fresh page load has no header and says so in the query instead.
+ */
+function startingCursor(request: {
+  header(name: string): string | undefined;
+  query: unknown;
+}): number {
+  const resumed = Number(request.header("last-event-id"));
+  if (Number.isInteger(resumed) && resumed > 0) {
+    return resumed;
+  }
+
+  const asked = Number((request.query as { afterId?: unknown } | undefined)?.afterId ?? 0);
+  return Number.isInteger(asked) && asked > 0 ? asked : 0;
 }
 
 /** Translates multer's own failures into the API's error envelope. */

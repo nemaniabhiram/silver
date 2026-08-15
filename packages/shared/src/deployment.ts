@@ -120,6 +120,27 @@ function isWritableColumn(column: string): column is WritableColumn {
 type Executor = Pool | PoolClient;
 
 /**
+ * One channel for the whole system, carrying a deployment id as its payload.
+ * A channel per deployment would mean issuing LISTEN and UNLISTEN as viewers
+ * come and go, and channel names are SQL identifiers, so per-id channels would
+ * mean building identifiers out of values. One fixed name avoids both, and an
+ * id is far inside the 8000 byte payload limit.
+ */
+export const DEPLOYMENT_EVENTS_CHANNEL = "deployment_events";
+
+/**
+ * Wakes anything watching this deployment. Sent inside whatever transaction the
+ * caller is in, so Postgres holds it until commit: a listener can never be told
+ * about a row it cannot yet read.
+ */
+export async function notifyDeploymentChanged(
+  executor: Executor,
+  deploymentId: string,
+): Promise<void> {
+  await executor.query("SELECT pg_notify($1, $2)", [DEPLOYMENT_EVENTS_CHANNEL, deploymentId]);
+}
+
+/**
  * The only sanctioned way to change a deployment's status. Returns null when the
  * row has left `from` already, which callers read as a lost race: a conflict in
  * the api, something to skip in the worker.
@@ -159,5 +180,13 @@ export async function transitionDeployment(
   );
 
   const row = result.rows[0];
-  return row ? mapDeploymentRow(row) : null;
+  if (!row) {
+    return null;
+  }
+
+  // Every status change in the system passes through here, so this is the one
+  // place that has to announce them.
+  await notifyDeploymentChanged(executor, id);
+
+  return mapDeploymentRow(row);
 }

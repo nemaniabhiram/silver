@@ -10,6 +10,7 @@ import {
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
+import { DeploymentEvents } from "./events.js";
 
 const config = loadConfig({ ...process.env, RATE_LIMIT_DEPLOYS_PER_HOUR: "3" });
 const log = createLogger("api-test");
@@ -78,7 +79,7 @@ describe.skipIf(!reachable)("the deployments api", () => {
     // quota. Clearing the table is what keeps one test's spend out of the next.
     await pool.query("TRUNCATE deployments CASCADE");
     await pool.query("TRUNCATE rate_limits");
-    app = createApp({ config, pool, storage, log });
+    app = createApp({ config, pool, storage, log }, new DeploymentEvents());
   });
 
   function upload() {

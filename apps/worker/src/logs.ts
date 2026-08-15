@@ -1,4 +1,4 @@
-import type { Logger } from "@silver/shared";
+import { type Logger, notifyDeploymentChanged } from "@silver/shared";
 import type pg from "pg";
 
 export const PLATFORM_PREFIX = "[silver]";
@@ -21,6 +21,11 @@ export async function appendDeploymentLogs(
      SELECT $1, * FROM unnest($2::text[])`,
     [deploymentId, messages],
   );
+
+  // Anyone watching this build learns there is something new to read. The
+  // batching above is what keeps this to a handful of wakes rather than one
+  // per line of a chatty install.
+  await notifyDeploymentChanged(pool, deploymentId);
 }
 
 export function announce(pool: pg.Pool, deploymentId: string, message: string): Promise<void> {
