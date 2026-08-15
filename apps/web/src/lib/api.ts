@@ -11,6 +11,7 @@ export interface Deployment {
   sourceSizeBytes: number;
   outputSizeBytes: number | null;
   outputFileCount: number | null;
+  artifactChecksum: string | null;
   errorMessage: string | null;
   attemptCount: number;
   createdAt: string;

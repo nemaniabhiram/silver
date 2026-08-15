@@ -9,6 +9,7 @@ export interface DeploymentResource {
   sourceSizeBytes: number;
   outputSizeBytes: number | null;
   outputFileCount: number | null;
+  artifactChecksum: string | null;
   errorMessage: string | null;
   attemptCount: number;
   createdAt: string;
@@ -28,6 +29,7 @@ export function toDeploymentResource(deployment: Deployment, config: Config): De
     sourceSizeBytes: deployment.sourceSizeBytes,
     outputSizeBytes: deployment.outputSizeBytes,
     outputFileCount: deployment.outputFileCount,
+    artifactChecksum: deployment.artifactChecksum,
     errorMessage: deployment.errorMessage,
     attemptCount: deployment.attemptCount,
     createdAt: deployment.createdAt.toISOString(),

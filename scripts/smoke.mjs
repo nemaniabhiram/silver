@@ -55,7 +55,12 @@ async function run() {
     throw new Error("deployment never became ready");
   }
 
-  check("recorded a checksum", Boolean(ready.outputFileCount), `${ready.outputFileCount} files`);
+  check(
+    "recorded a checksum",
+    /^[0-9a-f]{64}$/.test(ready.artifactChecksum ?? ""),
+    String(ready.artifactChecksum),
+  );
+  check("counted the files", Number(ready.outputFileCount) > 0, `${ready.outputFileCount} files`);
 
   const page = await siteFetch(deployment.id);
   const html = await page.text();

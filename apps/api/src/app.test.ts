@@ -162,6 +162,19 @@ describe.skipIf(!reachable)("the deployments api", () => {
       await request(app).get("/deployments/zzzzzzzzzz").expect(404);
       await request(app).get("/deployments/NOT-AN-ID").expect(404);
     });
+
+    /**
+     * The worker fingerprints every output tree, and until this the value went
+     * into the row and no further, so nothing outside the database could tell
+     * whether two deployments held the same site.
+     */
+    it("carries the artifact checksum, null until a build has produced one", async () => {
+      const { body } = await upload().expect(201);
+      const response = await request(app).get(`/deployments/${body.id}`).expect(200);
+
+      expect(response.body).toHaveProperty("artifactChecksum");
+      expect(response.body.artifactChecksum).toBeNull();
+    });
   });
 
   describe("lifecycle", () => {

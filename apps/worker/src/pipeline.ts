@@ -80,6 +80,7 @@ export async function runDeployment(
       error_message: null,
     });
 
+    await announceIdenticalTwin(pool, deployment.id, site.checksum);
     await announce(pool, deployment.id, `Deployed to ${deploymentUrl(deployment.id, config)}`);
   } catch (error) {
     await recordFailure(dependencies, deployment, error, startedAt);
@@ -114,6 +115,30 @@ async function runBuild(
     });
   } finally {
     await logs.close();
+  }
+}
+
+/**
+ * The checksum covers the whole output tree, so an equal one means this build
+ * produced the same site as an earlier deployment. Worth saying: someone who
+ * redeployed expecting a change learns their rebuild produced none.
+ */
+async function announceIdenticalTwin(
+  pool: pg.Pool,
+  deploymentId: string,
+  checksum: string,
+): Promise<void> {
+  const twin = await pool.query<{ id: string }>(
+    `SELECT id FROM deployments
+     WHERE artifact_checksum = $1 AND id <> $2 AND status = 'READY'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [checksum, deploymentId],
+  );
+
+  const previous = twin.rows[0];
+  if (previous) {
+    await announce(pool, deploymentId, `Output is identical to ${previous.id}.`);
   }
 }
 
