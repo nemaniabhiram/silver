@@ -20,6 +20,11 @@ export type {
 
 export { DEPLOYMENT_ID_PATTERN, isDeploymentId, newDeploymentId } from "./id.js";
 
+export { createLogger } from "./logger.js";
+export type { LogFields, LogFormat, Logger } from "./logger.js";
+
+export { loggerFor, requestId } from "./request-id.js";
+
 export { shutdownOnSignal } from "./shutdown.js";
 
 export {

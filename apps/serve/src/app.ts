@@ -1,6 +1,13 @@
 import { pipeline } from "node:stream/promises";
 import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
-import { type Config, pingDatabase, siteKey } from "@silver/shared";
+import {
+  type Config,
+  type Logger,
+  loggerFor,
+  pingDatabase,
+  requestId,
+  siteKey,
+} from "@silver/shared";
 import express, { type ErrorRequestHandler, type Express, type Response } from "express";
 import mime from "mime-types";
 import type pg from "pg";
@@ -13,6 +20,7 @@ export interface Dependencies {
   config: Config;
   pool: pg.Pool;
   storage: S3Client;
+  log: Logger;
 }
 
 interface StoredObject {
@@ -21,11 +29,12 @@ interface StoredObject {
   etag?: string;
 }
 
-export function createApp({ config, pool, storage }: Dependencies): Express {
+export function createApp({ config, pool, storage, log }: Dependencies): Express {
   const app = express();
   const lookup = new DeploymentLookup(pool);
 
   app.disable("x-powered-by");
+  app.use(requestId(log));
 
   app.get("/healthz", async (_request, response) => {
     try {
@@ -93,7 +102,7 @@ export function createApp({ config, pool, storage }: Dependencies): Express {
     await streamObject(response, indexKey, fallback);
   });
 
-  app.use(handleErrors);
+  app.use(handleErrors(log));
 
   return app;
 }
@@ -103,16 +112,18 @@ export function createApp({ config, pool, storage }: Dependencies): Express {
  * has to look like a page rather than like a stack trace. The visitor is told
  * their deployment is fine, because it is; only the path to its files is not.
  */
-const handleErrors: ErrorRequestHandler = (error, _request, response, next) => {
-  console.error("[serve] could not serve a request", error);
+const handleErrors =
+  (log: Logger): ErrorRequestHandler =>
+  (error, _request, response, next) => {
+    loggerFor(response, log).error("could not serve a request", error);
 
-  if (response.headersSent) {
-    next(error);
-    return;
-  }
+    if (response.headersSent) {
+      next(error);
+      return;
+    }
 
-  sendPage(response, 503, UNAVAILABLE_PAGE);
-};
+    sendPage(response, 503, UNAVAILABLE_PAGE);
+  };
 
 async function fetchObject(
   storage: S3Client,

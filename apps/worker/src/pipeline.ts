@@ -7,6 +7,7 @@ import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import {
   type Config,
   type Deployment,
+  type Logger,
   deploymentUrl,
   sourceKey,
   transitionDeployment,
@@ -26,13 +27,14 @@ export interface WorkerDependencies {
   config: Config;
   pool: pg.Pool;
   storage: S3Client;
+  log: Logger;
 }
 
 export async function runDeployment(
   dependencies: WorkerDependencies,
   deployment: Deployment,
 ): Promise<void> {
-  const { config, pool, storage } = dependencies;
+  const { config, pool, storage, log } = dependencies;
   const workspace = path.join(tmpdir(), "silver-builds", deployment.id);
   const startedAt = Date.now();
 
@@ -47,6 +49,7 @@ export async function runDeployment(
       zipPath,
       path.join(workspace, "src"),
       config.MAX_UPLOAD_MB * 4 * 1024 * 1024,
+      log,
     );
 
     const preset = await selectPreset(rootDir, deployment.requestedPreset);
@@ -55,6 +58,8 @@ export async function runDeployment(
     if (preset.buildCommand) {
       await runBuild(dependencies, deployment.id, rootDir, preset.buildCommand);
     }
+
+    log.info("build finished", { preset: preset.name });
 
     const outputDir = await preset.resolveOutputDir(rootDir);
     assertWithin(rootDir, outputDir);
@@ -84,12 +89,12 @@ export async function runDeployment(
 }
 
 async function runBuild(
-  { config, pool }: WorkerDependencies,
+  { config, pool, log }: WorkerDependencies,
   deploymentId: string,
   projectDir: string,
   command: string,
 ): Promise<void> {
-  const logs = createLogWriter(pool, deploymentId);
+  const logs = createLogWriter(pool, deploymentId, log);
 
   try {
     await ensureBuilderImage(config.BUILDER_IMAGE, (line) => logs.write(line));
@@ -113,7 +118,7 @@ async function runBuild(
 }
 
 async function recordFailure(
-  { pool }: WorkerDependencies,
+  { pool, log }: WorkerDependencies,
   deployment: Deployment,
   error: unknown,
   startedAt: number,
@@ -131,7 +136,7 @@ async function recordFailure(
   }
 
   const canRetry = deployment.attemptCount < deployment.maxAttempts;
-  console.error(`[worker] system error on ${deployment.id}`, error);
+  log.error("system error", error, { attempt: deployment.attemptCount });
 
   if (canRetry) {
     const waitSeconds = RETRY_BACKOFF_SECONDS * deployment.attemptCount;

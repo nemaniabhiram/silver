@@ -1,4 +1,10 @@
-import { createPool, createStorageClient, loadConfig, runMigrations } from "@silver/shared";
+import {
+  createLogger,
+  createPool,
+  createStorageClient,
+  loadConfig,
+  runMigrations,
+} from "@silver/shared";
 import { claimNextQueuedDeployment } from "./claim.js";
 import { expireOldDeployments } from "./cleanup.js";
 import { runDeployment, type WorkerDependencies } from "./pipeline.js";
@@ -8,13 +14,14 @@ const SWEEP_INTERVAL_MS = 60_000;
 const CLEANUP_INTERVAL_MS = 60 * 60_000;
 
 const config = loadConfig();
-const pool = createPool(config);
+const log = createLogger("worker", config.LOG_FORMAT);
+const pool = createPool(config, log);
 const storage = createStorageClient(config);
-const dependencies: WorkerDependencies = { config, pool, storage };
+const dependencies: WorkerDependencies = { config, pool, storage, log };
 
 const applied = await runMigrations(pool);
 if (applied.length > 0) {
-  console.log(`[worker] applied migrations: ${applied.join(", ")}`);
+  log.info("applied migrations", { migrations: applied.join(", ") });
 }
 
 let accepting = true;
@@ -34,9 +41,10 @@ await cleanup();
 const sweepTimer = setInterval(() => void sweep(), SWEEP_INTERVAL_MS);
 const cleanupTimer = setInterval(() => void cleanup(), CLEANUP_INTERVAL_MS);
 
-console.log(
-  `[worker] polling every ${config.POLL_INTERVAL_MS}ms, up to ${config.MAX_CONCURRENT_BUILDS} at a time`,
-);
+log.info("polling", {
+  intervalMs: config.POLL_INTERVAL_MS,
+  maxConcurrentBuilds: config.MAX_CONCURRENT_BUILDS,
+});
 
 while (accepting) {
   if (inFlight.size >= config.MAX_CONCURRENT_BUILDS) {
@@ -45,7 +53,7 @@ while (accepting) {
   }
 
   const deployment = await claimNextQueuedDeployment(pool).catch((error: unknown) => {
-    console.error("[worker] could not reach the queue", error);
+    log.error("could not reach the queue", error);
     return null;
   });
 
@@ -54,14 +62,16 @@ while (accepting) {
     continue;
   }
 
-  console.log(`[worker] building ${deployment.id}`);
+  // Every line about this build carries its id from here down.
+  const buildLog = log.child({ deploymentId: deployment.id });
+  buildLog.info("building");
 
   // runDeployment records its own build failures, so a rejection here means the
   // recording failed too, most likely because the database went away. Swallowing
   // it keeps that from reaching Promise.race above and ending the poll loop.
-  const build = runDeployment(dependencies, deployment)
+  const build = runDeployment({ ...dependencies, log: buildLog }, deployment)
     .catch((error: unknown) => {
-      console.error(`[worker] could not finish ${deployment.id}`, error);
+      buildLog.error("could not finish the build", error);
     })
     .finally(() => {
       inFlight.delete(build);
@@ -74,16 +84,16 @@ clearInterval(cleanupTimer);
 await Promise.allSettled(inFlight);
 await pool.end();
 storage.destroy();
-console.log("[worker] stopped");
+log.info("stopped");
 
 async function sweep(): Promise<void> {
   try {
     const recovered = await recoverStaleBuilds(dependencies);
     if (recovered > 0) {
-      console.log(`[worker] recovered ${recovered} interrupted build(s)`);
+      log.info("recovered interrupted builds", { count: recovered });
     }
   } catch (error) {
-    console.error("[worker] sweep failed", error);
+    log.error("sweep failed", error);
   }
 }
 
@@ -91,10 +101,10 @@ async function cleanup(): Promise<void> {
   try {
     const removed = await expireOldDeployments(dependencies);
     if (removed > 0) {
-      console.log(`[worker] expired ${removed} deployment(s)`);
+      log.info("expired deployments", { count: removed });
     }
   } catch (error) {
-    console.error("[worker] cleanup failed", error);
+    log.error("cleanup failed", error);
   }
 }
 

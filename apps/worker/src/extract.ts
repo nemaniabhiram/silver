@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Logger } from "@silver/shared";
 import AdmZip from "adm-zip";
 import { BuildFailure } from "./failure.js";
 
@@ -70,8 +71,9 @@ export async function extractZip(
   zipPath: string,
   destDir: string,
   maxTotalBytes: number,
+  log: Logger,
 ): Promise<string> {
-  const entries = readEntries(zipPath);
+  const entries = readEntries(zipPath, log);
 
   if (entries.length > MAX_ENTRIES) {
     throw new BuildFailure(`Zip holds more than ${MAX_ENTRIES} files.`);
@@ -112,13 +114,14 @@ export async function extractZip(
   return singleRoot ? path.join(destDir, singleRoot) : destDir;
 }
 
-function readEntries(zipPath: string): AdmZip.IZipEntry[] {
+function readEntries(zipPath: string, log: Logger): AdmZip.IZipEntry[] {
   try {
     return new AdmZip(zipPath).getEntries();
   } catch (error) {
     // The library's own wording names itself and its internals, which tells the
-    // person who dropped the file nothing they can act on.
-    console.error(`[worker] unreadable archive ${zipPath}`, error);
+    // person who dropped the file nothing they can act on. It goes to the log,
+    // where whoever is debugging the platform can still read it.
+    log.error("unreadable archive", error, { zipPath });
     throw new BuildFailure("That zip is damaged or incomplete. Try creating it again.");
   }
 }

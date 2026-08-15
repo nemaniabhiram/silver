@@ -1,3 +1,4 @@
+import type { Logger } from "@silver/shared";
 import type pg from "pg";
 
 export const PLATFORM_PREFIX = "[silver]";
@@ -40,6 +41,7 @@ export interface LogWriter {
 export function createLogWriter(
   pool: pg.Pool,
   deploymentId: string,
+  log: Logger,
   maxBytes: number = MAX_LOG_BYTES,
 ): LogWriter {
   let buffered: string[] = [];
@@ -62,7 +64,7 @@ export function createLogWriter(
     buffered = [];
     writes = writes.then(() =>
       appendDeploymentLogs(pool, deploymentId, batch).catch((error: unknown) => {
-        console.error(`[worker] could not persist logs for ${deploymentId}`, error);
+        log.error("could not persist build logs", error);
       }),
     );
   }

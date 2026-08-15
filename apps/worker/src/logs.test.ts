@@ -1,6 +1,9 @@
+import { createLogger } from "@silver/shared";
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import { createLogWriter } from "./logs.js";
+
+const log = createLogger("test");
 
 function recordingPool() {
   const batches: string[][] = [];
@@ -14,7 +17,7 @@ function recordingPool() {
 describe("createLogWriter", () => {
   it("batches rather than writing a row per line", async () => {
     const { pool, batches, query } = recordingPool();
-    const writer = createLogWriter(pool, "abc1234567");
+    const writer = createLogWriter(pool, "abc1234567", log);
 
     for (let line = 0; line < 60; line += 1) {
       writer.write(`line ${line}`);
@@ -27,7 +30,7 @@ describe("createLogWriter", () => {
 
   it("writes everything still buffered when it closes", async () => {
     const { pool, batches } = recordingPool();
-    const writer = createLogWriter(pool, "abc1234567");
+    const writer = createLogWriter(pool, "abc1234567", log);
 
     writer.write("only line");
     await writer.close();
@@ -37,7 +40,7 @@ describe("createLogWriter", () => {
 
   it("stops and says so once a build floods the log", async () => {
     const { pool, batches } = recordingPool();
-    const writer = createLogWriter(pool, "abc1234567", 100);
+    const writer = createLogWriter(pool, "abc1234567", log, 100);
 
     for (let line = 0; line < 500; line += 1) {
       writer.write("x".repeat(50));
@@ -52,9 +55,12 @@ describe("createLogWriter", () => {
 
   it("keeps writing when a batch fails, since logs are not the deployment", async () => {
     const query = vi.fn().mockRejectedValue(new Error("connection lost"));
-    const writer = createLogWriter({ query } as unknown as Pool, "abc1234567");
+    const quiet = createLogger("test");
+    vi.spyOn(quiet, "error").mockImplementation(() => undefined);
+    const writer = createLogWriter({ query } as unknown as Pool, "abc1234567", quiet);
 
     writer.write("a line");
     await expect(writer.close()).resolves.toBeUndefined();
+    expect(quiet.error).toHaveBeenCalled();
   });
 });

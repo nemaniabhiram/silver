@@ -1,5 +1,6 @@
 import { deflateRawSync } from "node:zlib";
 import {
+  createLogger,
   createPool,
   createStorageClient,
   ensureBucket,
@@ -11,7 +12,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 
 const config = loadConfig({ ...process.env, RATE_LIMIT_DEPLOYS_PER_HOUR: "3" });
-const pool = createPool(config);
+const log = createLogger("api-test");
+const pool = createPool(config, log);
 const storage = createStorageClient(config);
 
 const reachable = await Promise.all([
@@ -75,7 +77,7 @@ describe.skipIf(!reachable)("the deployments api", () => {
     await pool.query("TRUNCATE deployments CASCADE");
     // A fresh app means fresh in-memory counters, so quota tests do not
     // inherit spend from the test before them.
-    app = createApp({ config, pool, storage });
+    app = createApp({ config, pool, storage, log });
   });
 
   function upload() {

@@ -1,5 +1,5 @@
 import type { S3Client } from "@aws-sdk/client-s3";
-import { loadConfig } from "@silver/shared";
+import { createLogger, loadConfig } from "@silver/shared";
 import type pg from "pg";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,12 +17,15 @@ function storageThatFails(error: Error): S3Client {
   return { send: () => Promise.reject(error) } as unknown as S3Client;
 }
 
+const log = createLogger("serve-test");
+
 function appWith(pool: pg.Pool, storage: S3Client) {
-  return createApp({ config: loadConfig({}), pool, storage });
+  return createApp({ config: loadConfig({}), pool, storage, log });
 }
 
 describe("failures behind a live site", () => {
   beforeEach(() => {
+    vi.spyOn(log, "error").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 

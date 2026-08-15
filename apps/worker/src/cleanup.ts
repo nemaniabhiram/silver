@@ -45,7 +45,9 @@ export async function expireOldDeployments(dependencies: WorkerDependencies): Pr
         removed += 1;
       }
     } catch (error) {
-      console.error(`[worker] could not expire ${deployment.id}`, error);
+      dependencies.log.error("could not expire deployment", error, {
+        deploymentId: deployment.id,
+      });
     }
   }
 

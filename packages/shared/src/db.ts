@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import type { Config } from "./config.js";
+import type { Logger } from "./logger.js";
 
 const { Pool } = pg;
 
@@ -16,7 +17,7 @@ export const MIGRATIONS_DIR = resolve(
 
 const MIGRATION_LOCK_ID = 7734001;
 
-export function createPool(config: Config): pg.Pool {
+export function createPool(config: Config, logger: Logger): pg.Pool {
   const pool = new Pool({ connectionString: config.DATABASE_URL, max: 5 });
 
   /**
@@ -28,7 +29,7 @@ export function createPool(config: Config): pg.Pool {
    * and nothing more.
    */
   pool.on("error", (error) => {
-    console.error("[db] idle connection lost", error.message);
+    logger.warn("idle connection lost", { err: error.message });
   });
 
   return pool;

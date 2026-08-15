@@ -2,6 +2,7 @@ import {
   DEPLOYMENT_STATUSES,
   type DeploymentStatus,
   VALID_TRANSITIONS,
+  createLogger,
   createPool,
   loadConfig,
   newDeploymentId,
@@ -11,7 +12,7 @@ import {
 import { afterAll, describe, expect, it } from "vitest";
 
 const config = loadConfig();
-const pool = createPool(config);
+const pool = createPool(config, createLogger("transitions-test"));
 
 // Resolved before the suite is registered, because skipIf is evaluated then. A
 // flag set in beforeAll comes too late and the suite runs against nothing.

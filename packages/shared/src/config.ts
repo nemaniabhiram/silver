@@ -38,6 +38,9 @@ const ConfigSchema = z.object({
   BUILDER_IMAGE: z.string().min(1).default("silver-builder:latest"),
 
   RETENTION_DAYS: nonNegativeInt.default(7),
+
+  /** pretty reads well in a terminal; json is what a log collector can parse. */
+  LOG_FORMAT: z.enum(["pretty", "json"]).default("pretty"),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

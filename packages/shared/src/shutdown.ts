@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import type { Logger } from "./logger.js";
 
 const FORCE_EXIT_MS = 10_000;
 
@@ -11,7 +12,11 @@ const FORCE_EXIT_MS = 10_000;
  * once, after the server is closed, and a failure there is logged rather than
  * thrown: the process is on its way out either way.
  */
-export function shutdownOnSignal(name: string, server: Server, release: () => Promise<void>): void {
+export function shutdownOnSignal(
+  logger: Logger,
+  server: Server,
+  release: () => Promise<void>,
+): void {
   let closing = false;
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -20,10 +25,10 @@ export function shutdownOnSignal(name: string, server: Server, release: () => Pr
         return;
       }
       closing = true;
-      console.log(`[${name}] draining`);
+      logger.info("draining", { signal });
 
       const giveUp = setTimeout(() => {
-        console.error(`[${name}] gave up waiting for in-flight requests`);
+        logger.error("gave up waiting for in-flight requests");
         process.exit(1);
       }, FORCE_EXIT_MS);
       giveUp.unref();
@@ -40,9 +45,9 @@ export function shutdownOnSignal(name: string, server: Server, release: () => Pr
     try {
       await release();
     } catch (error) {
-      console.error(`[${name}] could not release its resources`, error);
+      logger.error("could not release its resources", error);
     }
 
-    console.log(`[${name}] stopped`);
+    logger.info("stopped");
   }
 }

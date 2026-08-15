@@ -1,4 +1,5 @@
-import type { NextFunction, Request, Response } from "express";
+import { type Logger, loggerFor } from "@silver/shared";
+import type { ErrorRequestHandler } from "express";
 
 export type ApiErrorCode =
   | "INVALID_UPLOAD"
@@ -33,28 +34,25 @@ export class ApiError extends Error {
   }
 }
 
-export function handleErrors(
-  error: unknown,
-  _request: Request,
-  response: Response,
-  next: NextFunction,
-): void {
-  if (response.headersSent) {
-    next(error);
-    return;
-  }
+export function createErrorHandler(log: Logger): ErrorRequestHandler {
+  return (error, _request, response, next) => {
+    if (response.headersSent) {
+      next(error);
+      return;
+    }
 
-  const apiError =
-    error instanceof ApiError
-      ? error
-      : new ApiError("INTERNAL", "Something broke on our side. Try again.");
+    const apiError =
+      error instanceof ApiError
+        ? error
+        : new ApiError("INTERNAL", "Something broke on our side. Try again.");
 
-  if (!(error instanceof ApiError)) {
-    console.error("[api] unhandled error", error);
-  }
+    if (!(error instanceof ApiError)) {
+      loggerFor(response, log).error("unhandled error", error);
+    }
 
-  response.set(apiError.headers);
-  response.status(apiError.status).json({
-    error: { code: apiError.code, message: apiError.message },
-  });
+    response.set(apiError.headers);
+    response.status(apiError.status).json({
+      error: { code: apiError.code, message: apiError.message },
+    });
+  };
 }

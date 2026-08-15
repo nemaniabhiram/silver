@@ -1,4 +1,5 @@
 import {
+  createLogger,
   createPool,
   createStorageClient,
   loadConfig,
@@ -8,19 +9,20 @@ import {
 import { createApp } from "./app.js";
 
 const config = loadConfig();
-const pool = createPool(config);
+const log = createLogger("api", config.LOG_FORMAT);
+const pool = createPool(config, log);
 const storage = createStorageClient(config);
 
 const applied = await runMigrations(pool);
 if (applied.length > 0) {
-  console.log(`[api] applied migrations: ${applied.join(", ")}`);
+  log.info("applied migrations", { migrations: applied.join(", ") });
 }
 
-const server = createApp({ config, pool, storage }).listen(config.API_PORT, () => {
-  console.log(`[api] listening on http://localhost:${config.API_PORT}`);
+const server = createApp({ config, pool, storage, log }).listen(config.API_PORT, () => {
+  log.info("listening", { url: `http://localhost:${config.API_PORT}` });
 });
 
-shutdownOnSignal("api", server, async () => {
+shutdownOnSignal(log, server, async () => {
   await pool.end();
   storage.destroy();
 });
