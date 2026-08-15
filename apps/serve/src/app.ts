@@ -162,6 +162,7 @@ async function fetchObject(
  * ends in index.html.
  */
 async function streamObject(response: Response, key: string, object: StoredObject): Promise<void> {
+  setSafetyHeaders(response);
   response.setHeader("Content-Type", mime.lookup(key) || "application/octet-stream");
   response.setHeader("Cache-Control", cacheControlFor(key));
 
@@ -189,7 +190,19 @@ function isClientDisconnect(error: unknown): boolean {
 }
 
 function sendPage(response: Response, status: number, html: string): void {
+  setSafetyHeaders(response);
   response.status(status).type("html").send(html);
+}
+
+/**
+ * Everything served here was uploaded by a stranger. A deployment gets its own
+ * subdomain, so browsers already keep one site out of another's data, but that
+ * says nothing about the bytes within a single response: without nosniff a
+ * browser is free to decide a file the server called text is really script.
+ */
+function setSafetyHeaders(response: Response): void {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 }
 
 function statusCodeOf(error: unknown): number | undefined {

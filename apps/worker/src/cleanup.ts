@@ -9,6 +9,9 @@ import {
 import type { WorkerDependencies } from "./pipeline.js";
 
 const DELETE_BATCH = 1000;
+const EXPIRE_BATCH = 100;
+
+const EXPIRABLE = ["READY", "FAILED", "CANCELLED"] as const;
 
 /**
  * Anonymous deployments do not live forever. Expiry removes the files first and
@@ -18,40 +21,56 @@ const DELETE_BATCH = 1000;
  *
  * This is also why retry and redeploy are illegal from EXPIRED: the source
  * archive they would need is deleted here.
+ *
+ * Work is taken a batch at a time. A worker that has been down for a weekend
+ * comes back to a backlog of unknown size, and reading all of it into one array
+ * makes the size of that backlog the size of the heap.
  */
 export async function expireOldDeployments(dependencies: WorkerDependencies): Promise<number> {
   const { pool } = dependencies;
-
-  const expired = await pool.query<DeploymentRow>(
-    `SELECT * FROM deployments
-     WHERE (status = 'READY' AND expires_at < now())
-        OR (status IN ('FAILED','CANCELLED') AND expires_at < now())`,
-  );
-
   let removed = 0;
 
-  for (const row of expired.rows) {
-    const deployment = mapDeploymentRow(row);
+  // The cursor is what makes this terminate. An expired row leaves the result
+  // set once it is marked, but a row that failed to expire does not, so paging
+  // by "the next batch of matches" would hand back the same failures forever if
+  // storage were down. Walking a strictly increasing key skips them instead,
+  // and the next hourly run picks them up.
+  let after: { expiresAt: Date; id: string } = { expiresAt: new Date(0), id: "" };
 
-    try {
-      await deleteDeploymentObjects(dependencies, deployment.id);
-      const marked = await transitionDeployment(
-        pool,
-        deployment.id,
-        ["READY", "FAILED", "CANCELLED"],
-        "EXPIRED",
-      );
-      if (marked) {
-        removed += 1;
+  for (;;) {
+    const expired = await pool.query<DeploymentRow>(
+      `SELECT * FROM deployments
+       WHERE status = ANY($1)
+         AND expires_at < now()
+         AND (expires_at, id) > ($2, $3)
+       ORDER BY expires_at, id
+       LIMIT $4`,
+      [EXPIRABLE, after.expiresAt, after.id, EXPIRE_BATCH],
+    );
+
+    for (const row of expired.rows) {
+      const deployment = mapDeploymentRow(row);
+
+      try {
+        await deleteDeploymentObjects(dependencies, deployment.id);
+        const marked = await transitionDeployment(pool, deployment.id, [...EXPIRABLE], "EXPIRED");
+        if (marked) {
+          removed += 1;
+        }
+      } catch (error) {
+        dependencies.log.error("could not expire deployment", error, {
+          deploymentId: deployment.id,
+        });
       }
-    } catch (error) {
-      dependencies.log.error("could not expire deployment", error, {
-        deploymentId: deployment.id,
-      });
     }
-  }
 
-  return removed;
+    const last = expired.rows.at(-1);
+    if (!last || expired.rows.length < EXPIRE_BATCH) {
+      return removed;
+    }
+
+    after = { expiresAt: last.expires_at, id: last.id };
+  }
 }
 
 export async function deleteDeploymentObjects(

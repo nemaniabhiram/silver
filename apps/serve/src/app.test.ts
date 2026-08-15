@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import type { S3Client } from "@aws-sdk/client-s3";
 import { createLogger, loadConfig } from "@silver/shared";
 import type pg from "pg";
@@ -15,6 +16,18 @@ function poolReturning(status: string): pg.Pool {
 
 function storageThatFails(error: Error): S3Client {
   return { send: () => Promise.reject(error) } as unknown as S3Client;
+}
+
+/** Answers every GET with the same small body, whatever key is asked for. */
+function storageServing(body: string): S3Client {
+  return {
+    send: () =>
+      Promise.resolve({
+        Body: Readable.from([body]),
+        ContentLength: body.length,
+        ETag: '"abc123"',
+      }),
+  } as unknown as S3Client;
 }
 
 const log = createLogger("serve-test");
@@ -69,5 +82,62 @@ describe("failures behind a live site", () => {
 
     expect(response.status).toBe(404);
     expect(response.text).toContain("no site here");
+  });
+});
+
+/**
+ * These files came from a stranger, so the protections have to be on every way
+ * out of the service, not only the happy one.
+ */
+describe("safety headers", () => {
+  beforeEach(() => {
+    vi.spyOn(log, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const expectSafe = (headers: Record<string, string | undefined>) => {
+    expect(headers["x-content-type-options"]).toBe("nosniff");
+    expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  };
+
+  it("sets them on a served asset", async () => {
+    const response = await request(appWith(poolReturning("READY"), storageServing("body")))
+      .get("/index.html")
+      .set("Host", HOST);
+
+    expect(response.status).toBe(200);
+    expectSafe(response.headers);
+  });
+
+  it("sets them on an expired site", async () => {
+    const response = await request(appWith(poolReturning("EXPIRED"), storageServing("body")))
+      .get("/")
+      .set("Host", HOST);
+
+    expect(response.status).toBe(410);
+    expectSafe(response.headers);
+  });
+
+  it("sets them on a missing site", async () => {
+    const response = await request(appWith(poolReturning("READY"), storageServing("body")))
+      .get("/")
+      .set("Host", "localhost:4001");
+
+    expect(response.status).toBe(404);
+    expectSafe(response.headers);
+  });
+
+  it("sets them on the page shown when something breaks", async () => {
+    const response = await request(
+      appWith(poolReturning("READY"), storageThatFails(new Error("x"))),
+    )
+      .get("/index.html")
+      .set("Host", HOST);
+
+    expect(response.status).toBe(503);
+    expectSafe(response.headers);
   });
 });

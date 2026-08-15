@@ -37,10 +37,10 @@ export default tseslint.config(
     ...reactHooks.configs["recommended-latest"],
   },
 
-  /* Tests are excluded from the build tsconfigs, and the scripts are plain
-     JavaScript, so neither has a program to check against. */
+  /* Tests and tool configs sit outside the build tsconfigs, and the scripts are
+     plain JavaScript, so none of them has a program to check against. */
   {
-    files: ["**/*.test.ts", "**/*.test.tsx", "scripts/**/*.mjs", "*.js"],
+    files: ["**/*.test.ts", "**/*.test.tsx", "**/vitest.config.ts", "scripts/**/*.mjs", "*.js"],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: globals.node,
