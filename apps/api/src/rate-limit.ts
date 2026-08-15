@@ -1,4 +1,6 @@
+import type { Logger } from "@silver/shared";
 import type { RequestHandler } from "express";
+import type pg from "pg";
 import { ApiError } from "./errors.js";
 
 export interface RateLimitVerdict {
@@ -6,74 +8,110 @@ export interface RateLimitVerdict {
   retryAfterSeconds: number;
 }
 
-interface Window {
-  startedAt: number;
+interface WindowRow {
+  window_started_at: Date;
   count: number;
 }
 
-const MAX_TRACKED_KEYS = 10_000;
-
 /**
- * Fixed-window counters held in this process. A second api instance gets its own
- * counters, which is accepted for now. `consume` and `peek` are the seam a
- * shared store would slot into without touching any caller.
+ * Fixed window counters, kept in Postgres so every api instance reads and
+ * writes the same ones. Held in process memory they stopped meaning anything
+ * the moment a second instance existed, and a restart forgot them entirely.
+ *
+ * `consume` counts a request against the window; `peek` reports the verdict
+ * without spending anything, for work whose outcome is not yet known.
  */
 export class RateLimiter {
-  private readonly windows = new Map<string, Window>();
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly log: Logger,
+  ) {}
 
-  /** Counts the request against the window. */
-  consume(
+  async consume(
     key: string,
     limit: number,
     windowMs: number,
-    now: number = Date.now(),
-  ): RateLimitVerdict {
-    return this.evaluate(key, limit, windowMs, now, true);
+    now: Date = new Date(),
+  ): Promise<RateLimitVerdict> {
+    try {
+      // One statement, so two instances arriving together cannot both read the
+      // same count and both decide they are under the limit.
+      const result = await this.pool.query<WindowRow>(
+        `INSERT INTO rate_limits (key, window_started_at, count)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (key) DO UPDATE SET
+           count = CASE
+             WHEN $2 - rate_limits.window_started_at >= $3::interval THEN 1
+             ELSE rate_limits.count + 1
+           END,
+           window_started_at = CASE
+             WHEN $2 - rate_limits.window_started_at >= $3::interval THEN $2
+             ELSE rate_limits.window_started_at
+           END
+         RETURNING window_started_at, count`,
+        [key, now, intervalOf(windowMs)],
+      );
+
+      return verdictFor(result.rows[0], limit, windowMs, now);
+    } catch (error) {
+      return this.failOpen(error);
+    }
   }
 
-  /** Reports the verdict without spending anything, for work done before the outcome is known. */
-  peek(key: string, limit: number, windowMs: number, now: number = Date.now()): RateLimitVerdict {
-    return this.evaluate(key, limit, windowMs, now, false);
-  }
-
-  private evaluate(
+  async peek(
     key: string,
     limit: number,
     windowMs: number,
-    now: number,
-    commit: boolean,
-  ): RateLimitVerdict {
-    const window = this.windows.get(key);
+    now: Date = new Date(),
+  ): Promise<RateLimitVerdict> {
+    try {
+      const result = await this.pool.query<WindowRow>(
+        `SELECT window_started_at, count FROM rate_limits
+         WHERE key = $1 AND $2 - window_started_at < $3::interval`,
+        [key, now, intervalOf(windowMs)],
+      );
 
-    if (!window || now - window.startedAt >= windowMs) {
-      if (commit) {
-        this.pruneIfCrowded(now, windowMs);
-        this.windows.set(key, { startedAt: now, count: 1 });
+      const window = result.rows[0];
+      if (!window) {
+        return { allowed: true, retryAfterSeconds: 0 };
       }
-      return { allowed: true, retryAfterSeconds: 0 };
-    }
 
-    if (window.count >= limit) {
-      const remainingMs = window.startedAt + windowMs - now;
-      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
+      // peek asks whether the next request would be allowed, so it compares
+      // against what the count would become rather than what it is.
+      return verdictFor({ ...window, count: window.count + 1 }, limit, windowMs, now);
+    } catch (error) {
+      return this.failOpen(error);
     }
+  }
 
-    if (commit) {
-      window.count += 1;
-    }
+  /**
+   * A limiter that cannot reach the database must not take uploads down with
+   * it. Being briefly too generous is a smaller failure than being closed.
+   */
+  private failOpen(error: unknown): RateLimitVerdict {
+    this.log.warn("rate limit check failed, allowing the request", {
+      err: error instanceof Error ? error.message : "unknown",
+    });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+}
+
+function verdictFor(
+  window: WindowRow | undefined,
+  limit: number,
+  windowMs: number,
+  now: Date,
+): RateLimitVerdict {
+  if (!window || window.count <= limit) {
     return { allowed: true, retryAfterSeconds: 0 };
   }
 
-  private pruneIfCrowded(now: number, windowMs: number): void {
-    if (this.windows.size < MAX_TRACKED_KEYS) {
-      return;
-    }
-    for (const [key, window] of this.windows) {
-      if (now - window.startedAt >= windowMs) {
-        this.windows.delete(key);
-      }
-    }
-  }
+  const remainingMs = window.window_started_at.getTime() + windowMs - now.getTime();
+  return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000)) };
+}
+
+function intervalOf(windowMs: number): string {
+  return `${windowMs} milliseconds`;
 }
 
 export function tooFast(retryAfterSeconds: number): ApiError {
@@ -88,8 +126,8 @@ export function rateLimit(
   limit: number,
   windowMs: number,
 ): RequestHandler {
-  return (request, _response, next) => {
-    const verdict = limiter.consume(`${bucket}:${request.ip}`, limit, windowMs);
+  return async (request, _response, next) => {
+    const verdict = await limiter.consume(`${bucket}:${request.ip}`, limit, windowMs);
     next(verdict.allowed ? undefined : tooFast(verdict.retryAfterSeconds));
   };
 }

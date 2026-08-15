@@ -74,9 +74,10 @@ describe.skipIf(!reachable)("the deployments api", () => {
   let app: ReturnType<typeof createApp>;
 
   beforeEach(async () => {
+    // Counters live in the database now, so a fresh app is no longer a fresh
+    // quota. Clearing the table is what keeps one test's spend out of the next.
     await pool.query("TRUNCATE deployments CASCADE");
-    // A fresh app means fresh in-memory counters, so quota tests do not
-    // inherit spend from the test before them.
+    await pool.query("TRUNCATE rate_limits");
     app = createApp({ config, pool, storage, log });
   });
 

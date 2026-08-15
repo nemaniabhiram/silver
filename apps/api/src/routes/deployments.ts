@@ -43,7 +43,7 @@ export function createDeploymentsRouter(dependencies: Dependencies, limiter: Rat
    */
   router.post("/", limitAttempts, acceptUpload(config), async (request, response) => {
     const quotaKey = `deploys:${request.ip}`;
-    const quota = limiter.peek(quotaKey, config.RATE_LIMIT_DEPLOYS_PER_HOUR, HOUR_MS);
+    const quota = await limiter.peek(quotaKey, config.RATE_LIMIT_DEPLOYS_PER_HOUR, HOUR_MS);
     if (!quota.allowed) {
       await discard(request.file?.path);
       throw tooFast(quota.retryAfterSeconds);
@@ -86,7 +86,7 @@ export function createDeploymentsRouter(dependencies: Dependencies, limiter: Rat
         retentionDays: config.RETENTION_DAYS,
       });
 
-      limiter.consume(quotaKey, config.RATE_LIMIT_DEPLOYS_PER_HOUR, HOUR_MS);
+      await limiter.consume(quotaKey, config.RATE_LIMIT_DEPLOYS_PER_HOUR, HOUR_MS);
       response.status(201).json(toDeploymentResource(deployment, config));
     } finally {
       await discard(file.path);

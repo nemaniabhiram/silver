@@ -30,6 +30,8 @@ export async function expireOldDeployments(dependencies: WorkerDependencies): Pr
   const { pool } = dependencies;
   let removed = 0;
 
+  await forgetSpentRateLimits(dependencies);
+
   // The cursor is what makes this terminate. An expired row leaves the result
   // set once it is marked, but a row that failed to expire does not, so paging
   // by "the next batch of matches" would hand back the same failures forever if
@@ -70,6 +72,21 @@ export async function expireOldDeployments(dependencies: WorkerDependencies): Pr
     }
 
     after = { expiresAt: last.expires_at, id: last.id };
+  }
+}
+
+/**
+ * Rate limit rows outlive their window and nothing else would ever remove them,
+ * so an address seen once would be remembered forever. The longest window is an
+ * hour; anything twice that old cannot affect a verdict.
+ */
+async function forgetSpentRateLimits({ pool, log }: WorkerDependencies): Promise<void> {
+  try {
+    await pool.query(
+      "DELETE FROM rate_limits WHERE window_started_at < now() - interval '2 hours'",
+    );
+  } catch (error) {
+    log.error("could not clear spent rate limits", error);
   }
 }
 

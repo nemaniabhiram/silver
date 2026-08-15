@@ -9,7 +9,7 @@ import { createHealthRouter } from "./routes/health.js";
 
 export function createApp(dependencies: Dependencies): Express {
   const app = express();
-  const limiter = new RateLimiter();
+  const limiter = new RateLimiter(dependencies.pool, dependencies.log);
 
   app.set("trust proxy", dependencies.config.TRUST_PROXY);
   // Without exposing it, CORS hides the request id from the very page that
